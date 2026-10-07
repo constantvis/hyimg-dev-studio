@@ -1,0 +1,12 @@
+{
+ "title": "Dev studio",
+ "title_ru": "Дев-студия",
+ "version": "0.2.0",
+ "description": "HTML files as cards; Dev mode edits a page the way Figma edits a frame",
+ "description_ru": "HTML-файлы карточками; дев-режим правит страницу, как Figma правит фрейм",
+ "canvas": "canvas.js",
+ "about": "HTML files of the library as cards on the Hyimg canvas, a live sandboxed page when big on screen; Dev mode: the page's DOM tree, the live page and an inspector of the selected element; it edits the file in place: colours, fill, stroke, corners, type, opacity, padding, size and text, a :root variable for this element or everywhere, undo with ⌘Z",
+ "server": "server.py",
+ "kinds": { "html": [".html", ".htm"] },
+ "pageScript": "agent.js"
+}
