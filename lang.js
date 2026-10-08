@@ -5,14 +5,15 @@
 const P = "dev::";
 const RU = {
   // the card
-  "HTML page: double-click for Dev mode": "HTML-страница: двойной клик открывает дев-режим",
+  "HTML page: double-click for Dev Studio": "HTML-страница: двойной клик открывает Dev Studio",
   "HTML page": "HTML-страница",
-  "Double-click or Dev in the dock to edit the page": "Двойной клик или «Дев» в доке, чтобы править страницу",
-  // the dock's mode switch
+  "Double-click or Dev Studio in the dock to edit the page": "Двойной клик или Dev Studio в доке, чтобы править страницу",
+  // the dock's mode switch: the short label, the studio's name (owner 2026-10-08: Dev Studio)
   "Dev": "Дев",
-  "Dev mode for the selected HTML card: the page's tree, the live page, the inspector": "Дев-режим для выбранной HTML-карточки: дерево страницы, живая страница, инспектор",
-  "Select an HTML card or enter one: Dev mode opens for it": "Выбери HTML-карточку или войди в нее: для нее откроется дев-режим",
-  // Dev mode
+  "Dev Studio": "Dev Studio",
+  "Dev Studio for the selected HTML card: the page's tree, the live page, the inspector": "Dev Studio для выбранной HTML-карточки: дерево страницы, живая страница, инспектор",
+  "Select an HTML card or enter one: Dev Studio opens for it": "Выбери HTML-карточку или войди в нее: для нее откроется Dev Studio",
+  // Dev Studio
   "Find element": "Найти элемент",
   "Elements": "Элементы",
   "Nothing found": "Ничего не найдено",
@@ -28,6 +29,13 @@ const RU = {
   "Draw over the page · P": "Рисовать поверх страницы · P",
   "Draw": "Рисовать",
   "Click an element of the page to comment on it": "Кликни по элементу страницы, чтобы его прокомментировать",
+  // a comment from the element tree (owner 2026-10-08): the row's button, its count, a dot on a folded row
+  "Comment on this element · C": "Комментарий к этому элементу · C",
+  "New comment on this element · C": "Новый комментарий к этому элементу · C",
+  "{n} comments: open": ["{n} комментарий: открыть", "{n} комментария: открыть", "{n} комментариев: открыть"],
+  "Comments inside": "Внутри есть комментарии",
+  "The page did not say where this element is": "Страница не ответила, где этот элемент",
+  "This element is gone from the page": "Этого элемента уже нет на странице",
   "Undo the last edit of the file · ⌘Z": "Отменить последнюю правку файла · ⌘Z",
   "Undo": "Отменить",
   "Redo · ⇧⌘Z": "Вернуть · ⇧⌘Z",
@@ -43,6 +51,9 @@ const RU = {
   "Page": "Страница",
   "Viewport": "Вьюпорт",
   "<b>Click</b> an element in the page or the tree to edit it, <b>⇧</b> adds one": "<b>Клик</b> по элементу на странице или в дереве, чтобы его править, <b>⇧</b> добавляет еще один",
+  "The page takes the clicks: <b>I</b> turns on Select to pick its elements, or pick one in the tree": "Клики получает страница: <b>I</b> включает «Выбрать», чтобы выбирать ее элементы, или выбери элемент в дереве",
+  "Pinch zooms the board, after a click in the page the page; <b>Esc</b> undoes the click, <b>⌥</b> skips it": "Щипок приближает доску, а после клика по странице саму страницу. <b>Esc</b> отменяет клик, <b>⌥</b> обходится без него",
+  "The page has the zoom · Esc to give it back": "Зум у страницы · Esc вернет его доске",
   // editing (0.2): the inspector's controls, typing in place, the reasons a thing can't be saved
   "Layout": "Раскладка",
   "Appearance": "Вид",
@@ -61,7 +72,7 @@ const RU = {
   "Everywhere · {n}": "Везде · {n}",
   "From {tag}": "От {tag}",
   "{v} is declared outside this file": "{v} объявлена не в этом файле",
-  "{v} is declared inside a rule Dev mode doesn't write": "{v} объявлена в правиле, которое дев-режим не правит",
+  "{v} is declared inside a rule Dev Studio doesn't write": "{v} объявлена в правиле, которое Dev Studio не правит",
   "<b>Double-click</b> the text or <b>Enter</b> to type it": "<b>Двойной клик</b> по тексту или <b>Enter</b>, чтобы его набрать",
   "<b>Reading</b> the file…": "<b>Читаю</b> файл…",
   "<b>Made by a script</b>, can't be saved: the file has no such element": "<b>Сделан скриптом</b>, сохранить нельзя: в файле такого элемента нет",
@@ -82,11 +93,12 @@ const RU = {
   "computed": "вычисленные",
   "Attributes": "Атрибуты",
   "none": "нет",
-  "Dev mode: this Hyimg shows no sandboxed pages, update it": "Дев-режим: этот Hyimg не показывает страницы в песочнице, обнови его",
+  "Dev Studio: this Hyimg shows no sandboxed pages, update it": "Dev Studio: этот Hyimg не показывает страницы в песочнице, обнови его",
   "{n} elements": ["{n} элемент", "{n} элемента", "{n} элементов"],
 };
 const EN = {
   "{n} elements": ["{n} element", "{n} elements"],
+  "{n} comments: open": ["{n} comment: open", "{n} comments: open"],
 };
 
 const pre = d => Object.fromEntries(Object.entries(d).map(([k, v]) => [P + k, v]));

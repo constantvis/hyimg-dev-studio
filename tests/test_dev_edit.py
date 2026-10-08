@@ -150,7 +150,8 @@ def test_edits_write_the_file_in_place_and_undo_takes_them_back(ed):
             page.wait_for_timeout(150); b = page.locator(".plg[data-id=e1] iframe.dvf").bounding_box()
             if b == last: break
             last = b
-        assert page.evaluate("__dev.D.picking") is True, "the select tool is on when Dev mode opens"
+        assert page.evaluate("__dev.D.picking") is False, "the page takes the clicks when Dev mode opens (owner 2026-10-08)"
+        page.click(".dvbar [data-tool=pick]"); page.wait_for_function("() => __dev.D.picking")
 
         # 1. a click selects the h1; a fill typed in the inspector goes into its style attribute, nothing else of the file changes
         click_in(page, frame, "#title"); d = picked(page, "h1", "Hello world")
@@ -162,7 +163,7 @@ def test_edits_write_the_file_in_place_and_undo_takes_them_back(ed):
         copies = list((state / "boards/_history/_html/site/edit.html").glob("*.html"))
         assert len(copies) == 1 and copies[0].read_bytes() == orig, "the file as it was, kept before the first write"
         line = json.loads((state / "boards/_history/_html/index.jsonl").read_text().splitlines()[-1])
-        assert line["path"] == "site/edit.html" and line["label"] == "before Dev mode edits"
+        assert line["path"] == "site/edit.html" and line["label"] == "before Dev Studio edits"
 
         # 2. the section's fill comes from --purple: the inspector says so; «Everywhere» writes the :root declaration only
         click_in(page, frame, "#hero", shift=False); page.mouse.move(5, 5)

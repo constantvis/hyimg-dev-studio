@@ -46,7 +46,7 @@ export function drawEdit(D, t, icon) {
     if (v) row += `<span class="dvar" title="${esc(o.from ? t("From {tag}", { tag: o.from }) : v)}">${esc(v)}</span>`;
     row += `</div>`;
     if (v) {
-      const can = dv && dv.where === "root", tip = !dv ? t("{v} is declared outside this file", { v }) : dv.where !== "root" ? t("{v} is declared inside a rule Dev mode doesn't write", { v }) : "";
+      const can = dv && dv.where === "root", tip = !dv ? t("{v} is declared outside this file", { v }) : dv.where !== "root" ? t("{v} is declared inside a rule Dev Studio doesn't write", { v }) : "";
       row += `<div class="dsc"><hy-segmented variant="tint" size="s" value="${scope(prop)}" data-s="${prop}" label="${esc(v)}">`
         + `<button value="el">${esc(t("This element"))}</button><button value="all"${can ? "" : ` disabled data-tip="${esc(tip)}" title="${esc(tip)}"`}>`
         + `${esc(t("Everywhere · {n}", { n: dv ? dv.uses : 0 }))}</button></hy-segmented></div>`;

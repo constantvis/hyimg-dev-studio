@@ -15,8 +15,8 @@ class Browser:
     def __init__(self, log, goto_error=None, shot_error=None):
         self.log, self.goto_error, self.shot_error = log, goto_error, shot_error
 
-    def new_page(self, viewport=None):
-        self.log.append(("new_page", viewport))
+    def new_page(self, viewport=None, **kw):
+        self.log.append(("new_page", viewport, *([kw] if kw else [])))
         return Page(self)
 
     def close(self):
@@ -78,6 +78,11 @@ def test_the_page_is_opened_at_the_asked_size_and_its_first_screen_saved(render,
     assert log == [("launch",), ("new_page", {"width": 1280, "height": 800}), ("goto", "file:///lib/site/index.html", "load", 15000),
                    ("wait", 400), ("screenshot", str(out)), ("close",), ("stop",)]
     assert out.read_bytes() == b"\x89PNG"
+
+
+def test_scale_2_draws_the_page_at_its_css_size_into_twice_the_pixels(render, tmp_path):
+    log = render("file:///lib/site/index.html", "1280", "800", str(tmp_path / "k.png"), "2")
+    assert log[1] == ("new_page", {"width": 1280, "height": 800}, {"device_scale_factor": 2.0})
 
 
 def test_a_page_that_never_finishes_loading_is_drawn_as_it_stands(render, tmp_path):

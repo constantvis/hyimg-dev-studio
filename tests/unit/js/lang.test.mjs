@@ -20,9 +20,10 @@ test("every English plural has two forms and a Russian one of three", async () =
   for (const [k, v] of Object.entries(EN)) { assert.equal(v.length, 2, k); assert.ok(Array.isArray(RU[k]) && RU[k].length === 3, k); }
 });
 
-test("every key the card, Dev mode, its inspector and its edits ask for has its Russian", async () => {
+test("every key the card, Dev mode, its inspector, its edits and the tree's comments ask for has its Russian", async () => {
   const { RU } = await fresh(), missing = [];
-  for (const m of ["canvas.js", "inspect.js", "edits.js"].map(read).join("\n").matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) { const k = JSON.parse('"' + m[1] + '"'); if (!(k in RU)) missing.push(k); }
+  const src = ["canvas.js", "inspect.js", "edits.js", "treecomments.js"].map(read).join("\n");
+  for (const m of src.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) { const k = JSON.parse('"' + m[1] + '"'); if (!(k in RU)) missing.push(k); }
   assert.deepEqual(missing, []);
 });
 
@@ -37,7 +38,7 @@ test("a board with T gets the words once, every key under the plugin's prefix", 
   const t = L.translator({ t: k => `T(${k})`, strings: d => handed.push(d) });
   assert.equal(handed.length, 1);
   assert.ok(Object.keys(handed[0].ru).every(k => k.startsWith("dev::")));
-  assert.deepEqual(Object.keys(handed[0].en), ["dev::{n} elements"]);
+  assert.deepEqual(Object.keys(handed[0].en), ["dev::{n} elements", "dev::{n} comments: open"]);
   assert.equal(t("HTML page"), "T(dev::HTML page)");
 });
 

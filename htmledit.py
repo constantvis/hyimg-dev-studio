@@ -120,7 +120,7 @@ def _check(prop, value):
     if prop not in PROPS: raise Refused(f"not an editable property: {prop}")
     if value == "": return
     if not isinstance(value, str) or not VALUE.fullmatch(value) or "/*" in value or value.count("(") != value.count(")"):
-        raise Refused(f"not a value Dev mode writes: {str(value)[:60]}")
+        raise Refused(f"not a value Dev Studio writes: {str(value)[:60]}")
 
 
 def _decls(css):
@@ -251,7 +251,7 @@ def set_var(text, name, value, sc=None):
     """a splice that sets the custom property's value in the first top-level :root or html rule that declares it"""
     if not re.fullmatch(r"--[\w-]{1,80}", name or ""): raise Refused("not a custom property")
     if not isinstance(value, str) or not value.strip() or not VALUE.fullmatch(value) or "/*" in value or value.count("(") != value.count(")"):
-        raise Refused(f"not a value Dev mode writes: {str(value)[:60]}")
+        raise Refused(f"not a value Dev Studio writes: {str(value)[:60]}")
     sc = sc or scan(text)
     for cs, ce in sc["styles"]:
         css = text[cs:ce]
@@ -280,7 +280,7 @@ def apply(text, ops):
             sc = sc or scan(text)
             cuts.append(set_var(text, o.get("name"), o.get("value"), sc))
         else:
-            raise Refused(f"not an edit Dev mode makes: {str(o.get('op'))[:40]}")
+            raise Refused(f"not an edit Dev Studio makes: {str(o.get('op'))[:40]}")
     for (at, tag), ch in merged.items():
         cuts.append(set_style(text, at, tag, ch))
     cuts = sorted((c for c in cuts if c), key=lambda c: (c[0], c[1]))

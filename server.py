@@ -29,8 +29,21 @@ MAX = 8 * 1024 * 1024
 STEPS_MAX, STEPS_BYTES = 400, 96 * 1024 * 1024
 
 
+# The picture is drawn at twice the page's css size, 2560 × 1600 (owner 2026-10-08: «справа мазня»: a card at 153 % on a Retina screen
+# needs 2200 device px, a 1280 picture was blown up); /thumb hands it out at 640, 1280 or 2560 px as the card's size on screen asks.
+# PREVIEW_KEY is part of the name Hyimg keeps the picture under (server.py preview), so the 1280 ones drawn before are drawn again, once,
+# when a card first asks for 2560.
+PREVIEW_KEY = "2x"
+
+
 def preview(full, out):
-    subprocess.run([sys.executable, os.path.join(HERE, "render.py"), pathlib.Path(full).as_uri(), "1280", "800", out],
+    preview_at(full, out, 1280, 800)
+
+
+# a card's own viewport (owner 2026-10-08: a 1440 × 900 card's still drawn at 1280 shifted its text and layout when the live page faded
+# in): Hyimg's /thumb?…&vw=&vh= asks for it and keeps it apart from the 1280 × 800 one of the library's grid
+def preview_at(full, out, w, h):
+    subprocess.run([sys.executable, os.path.join(HERE, "render.py"), pathlib.Path(full).as_uri(), str(int(w)), str(int(h)), out, "2"],
                    capture_output=True, timeout=60)
 
 
@@ -126,7 +139,7 @@ def keep_copy(full, rel, data, session, query):
     name = time.strftime("%y%m%d-%H%M%S") + os.path.splitext(full)[1]; n = 2
     while os.path.exists(os.path.join(d, name)): name = f"{time.strftime('%y%m%d-%H%M%S')}~{n}{os.path.splitext(full)[1]}"; n += 1
     with open(os.path.join(d, name), "wb") as f: f.write(data)
-    line = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), "path": rel, "copy": "/".join(rel.split("/") + [name]), "label": "before Dev mode edits"}
+    line = {"t": time.strftime("%Y-%m-%d %H:%M:%S"), "path": rel, "copy": "/".join(rel.split("/") + [name]), "label": "before Dev Studio edits"}
     if _by(query): line["by"] = _by(query)
     with open(os.path.join(st, "boards", "_history", "_html", "index.jsonl"), "a", encoding="utf-8") as f:
         f.write(json.dumps(line, ensure_ascii=False) + "\n")

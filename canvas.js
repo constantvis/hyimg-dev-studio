@@ -3,18 +3,21 @@
 //
 // An HTML card. An .html or .htm file of the library (manifest "kinds": the server lists them as kind "html", its picture is the page's
 // first screen drawn by Chromium, server.py) dropped from the library becomes {type: "html", src: <library path>, vw: 1280, x, y, w, h,
-// pics: [src]}: vw is the page's width in css px, its height follows the card's shape. At rest the card shows that picture; big on screen
-// (from 360 px wide, gone under 280, at most 4 at a time, never while the board moves: HY's view hook) the page itself runs in the card,
-// in <iframe sandbox="allow-scripts"> without allow-same-origin, served by Hyimg's /sandbox/<key>/ route, so it never reaches the app.
-// Measured 2026-10-06 (tests/test_dev_studio.py perf): see README.
+// pics: [src]}: vw is the page's width in css px, its height follows the card's shape. At rest the card shows that picture, as sharp as
+// its size on screen needs; big on screen (from 360 px wide, gone under 280, at most 4 at a time, the cards nearest the centre of the view,
+// never while the board moves: HY's view hook, cards.js) the page itself runs in the card, in <iframe sandbox="allow-scripts"> without
+// allow-same-origin, served by Hyimg's /sandbox/<key>/ route, so it never reaches the app. Measured 2026-10-06 (tests/test_dev_studio.py
+// perf): see README.
 //
 // Dev mode, the board's «Dev» mode (HY.mode), entered by a double click or the switch on one selected HTML card (the frames plugin's HTML
 // frame too, when it is not live). It stays on the same canvas (as the 3D studio and the frame editor do): the card turns live in place
 // and the camera brings it between two panels. Left, the page's DOM tree: the library's folder tree and the 3D outline's rows, chevrons and
 // guides, the library's «Find folder» field on top. Right, the inspector of the picked element: tag, id, classes, its box, a few computed
 // styles, its attributes. The page carries the plugin's inspector (agent.js, put first in its <head> by the server): hovering a row marks
-// the element in the page; the select tool («Select» in the dock, on when Dev mode opens, I turns it off so the page takes the clicks)
-// makes a click in the page select its element, ⇧ adds one. Done, Esc or Board in the switch leave it; the camera goes back.
+// the element in the page. The page opens live, its buttons take the clicks (owner 2026-10-08: «по дефолту не очень удобно, что выбран
+// Select: я, может быть, хочу покликать»); the select tool («Select» in the dock, or I) makes a click in the page select its element, ⇧
+// adds one, a double click types a text in place. Dev mode opens without it every time, nothing is remembered per card. Done, Esc or
+// Board in the switch leave it; the camera goes back. The board's host lifts the card while the mode is open (Hyimg ui/editlift.js).
 //
 // Editing (0.2, owner 2026-10-07: «Почему мы используем картинки, а не реальный HTML? ... Чтобы я как в Figma мог работать с нашими
 // HTML-файлами»): the inspector's controls (inspect.js) change the selected elements' style attribute or the custom property behind a value,
@@ -24,9 +27,11 @@
 import { translator } from "./lang.js";
 import { makeEdits } from "./edits.js";
 import { drawEdit, wire, why, CSS_EDIT } from "./inspect.js";
+import { makeCards, TYPE } from "./cards.js";
+import { makeTreeComments } from "./treecomments.js";
 
-const TYPE = "html", FRAME_TYPE = "htmlframe";   // FRAME_TYPE: the frames plugin's HTML frame, a library page as well
-const VW = 1280, VH = 800, BIG = 360, SMALL = 280, LIVE_MAX = 4, ROWS = 3000;
+const FRAME_TYPE = "htmlframe";   // the frames plugin's HTML frame, a library page as well
+const VW = 1280, VH = 800, ROWS = 3000;
 const PLUGIN = (new URL(import.meta.url).pathname.match(/\/plugins\/([^/]+)\//) || [])[1] || "dev";
 const EASE = [.32, .72, 0, 1];
 const enc = encodeURIComponent, pathUrl = p => p.split("/").map(enc).join("/");
@@ -36,48 +41,16 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 const svg = (n, s = 16, cls = "") => hyIcon(n, s, 1.85, cls);
 const IC = { code: "code", pick: "select", tag: "tag", find: "search" };   // hy-icon-names
 const CHEV = () => window.HY_CHEV;
-let HY, t = k => k, BASE = null, D = null, flyRaf = 0, EDITS = null;
-const LIVE = new Set();   // cards that show their page at rest
-const BUST = new Map();   // library path -> the file's revision after Dev mode wrote it: the card's picture is drawn again
-
-// where sandboxed library pages are served (Hyimg's server, /api/sandbox): one key per server start
-async function base() {
-  if (BASE) return BASE;
-  try { const r = await fetch("/api/sandbox"); if (r.ok) BASE = (await r.json()).base; } catch { BASE = null; }
-  return BASE;
-}
+let HY, t = k => k, D = null, flyRaf = 0, EDITS = null, C = null, TC = null;   // C: the cards at rest, their stills and live pages (cards.js)
 const cardEl = id => document.querySelector(`.plg[data-id="${CSS.escape(id)}"]`);
 const vwOf = it => it.vw || VW;
 const vhOf = it => Math.max(1, Math.round(vwOf(it) * it.h / it.w));
 const isPage = it => !!it && (it.type === TYPE || (it.type === FRAME_TYPE && typeof it.src === "string"));
 // a card of another plugin with a view of its own (an HTML frame's live view, the frames plugin): Dev mode's dock offers it (HY.ownOpen)
 const liveOf = id => { const it = HY.board.items[id]; return !!(it && it.type !== TYPE && HY.ownOpen && HY.ownOpen(id, true)); };
-const mark = () => `<span class="mk mk-br mk-kind" title="${esc(t("HTML page: double-click for Dev mode"))}"><b class="kp">${window.hyMarkIcon ? window.hyMarkIcon("doc") : ""}</b><span class="kw"><span><span class="kt">HTML</span></span></span></span>`;
+const mark = () => `<span class="mk mk-br mk-kind" title="${esc(t("HTML page: double-click for Dev Studio"))}"><b class="kp">${window.hyMarkIcon ? window.hyMarkIcon("doc") : ""}</b><span class="kw"><span><span class="kt">HTML</span></span></span></span>`;
 
-/* ---------- the card at rest ---------- */
-function card(el, it, id) {
-  let img = el.querySelector(":scope > img.dvi");
-  if (!img) {
-    el.insertAdjacentHTML("afterbegin", `<img class="dvi" alt="" decoding="async" draggable="false">${mark()}`); img = el.querySelector(":scope > img.dvi");
-    img.addEventListener("load", () => el.classList.add("lo"));
-  }
-  const u = `/thumb?p=${enc(it.src)}&s=640${BUST.has(it.src) ? "&v=" + BUST.get(it.src) : ""}`;
-  if (img._u !== u) { img._u = u; img.src = u; }
-  if (el._pv) sizeTo(el._pv, it);
-}
-function sizeTo(f, it) { const vw = vwOf(it); Object.assign(f.style, { width: vw + "px", height: vhOf(it) + "px", transform: `scale(${it.w / vw})` }); }
-// the page itself in the card, only while the card is big on screen (the view hook) and only a few at a time
-async function preview(id, el, it) {
-  if (el._pv || el._pvAsk) return; el._pvAsk = true;
-  const b = await base(); el._pvAsk = false;
-  if (!b || el._pv || !el.isConnected || (D && D.id === id)) return;
-  for (const k of LIVE) { const e = cardEl(k); if (!e || !e._pv) LIVE.delete(k); }
-  if (LIVE.size >= LIVE_MAX) return;
-  const f = document.createElement("iframe"); f.className = "dvp"; f.setAttribute("sandbox", "allow-scripts"); f.tabIndex = -1; f.setAttribute("aria-hidden", "true");
-  f.addEventListener("load", () => el.classList.add("pv"), { once: true });
-  sizeTo(f, it); f.src = b + pathUrl(it.src); el.appendChild(f); el._pv = f; LIVE.add(id);
-}
-function unpreview(id, el) { if (!el || !el._pv) return; el._pv.remove(); el._pv = null; el.classList.remove("pv"); LIVE.delete(id); }
+const sizeTo = (f, it) => C.sizeTo(f, it);
 
 /* ---------- Dev mode ---------- */
 // one curve for the camera's flight, the app's cubic-bezier(.32,.72,0,1)
@@ -108,19 +81,24 @@ function fitCam() {
 }
 const toPage = m => { if (D && D.frame && D.frame.contentWindow) D.frame.contentWindow.postMessage(Object.assign({ hydev: 2 }, m), "*"); };
 
+const KEYHINT = [{ id: "pick", keys: ["i"], t: "Select an element" }, { id: "comment", keys: ["c"], t: "Comment" }, { id: "back", keys: ["escape"], t: "Back" }];
 async function openDev(id) {
   if (D) closeDev();
   const it = HY.board.items[id], el = cardEl(id); if (!isPage(it) || !el) return;
-  const b = await base(); if (!b) return HY.toast(t("Dev mode: this Hyimg shows no sandboxed pages, update it"), "error");
+  const b = await C.base(); if (!b) return HY.toast(t("Dev Studio: this Hyimg shows no sandboxed pages, update it"), "error");
   if (D) closeDev();
-  unpreview(id, el);
-  D = { id, el, tree: null, open: new Set(), sel: null, sels: new Set(), detail: null, more: [], q: "", picking: true, prevCam: { ...HY.cam }, info: {},
+  C.unpreview(id, el);
+  D = { id, el, tree: null, open: new Set(), sel: null, sels: new Set(), detail: null, more: [], q: "", picking: false, prevCam: { ...HY.cam }, info: {},
     src: it.src, sid: Math.random().toString(36).slice(2, 10), rev: null, vars: [], srcErr: "", past: [], future: [], gen: 0, scope: {}, redraw: () => drawInspector() };
   el.classList.add("plg-live", "dvlive"); document.body.classList.add("dvedit");
   const f = document.createElement("iframe"); f.className = "dvf"; f.setAttribute("sandbox", "allow-scripts"); f.title = it.src;
   f.src = b + pathUrl(it.src) + "?hyp=" + enc(PLUGIN); sizeTo(f, it); el.appendChild(f); D.frame = f;
+  // a pinch over the page zooms the board until a click gives the page the zoom (Hyimg ui/framezoom.js; agent.js sends the gestures)
+  D.zoom = window.hyFrameZoom ? hyFrameZoom.attach(f, { card: el, changed: own => { toPage({ a: "zoom", on: own }); drawZoom(own); } }) : null;
   D.wait = setTimeout(() => { if (D && !D.tree) { D.info.none = true; drawTree(); } }, 6000);
   D.ui = buildUI(); HY.dock(D.bar); drawBar();
+  // the studio's keys over the dock (Hyimg ui/hy/keyhint.js, owner 2026-10-08): I picks an element, C comments, Esc steps out (onKey)
+  if (window.hyKeyHint) D.kh = window.hyKeyHint.show(document.getElementById("dock") || el, "dev", KEYHINT, { place: "above" });
   D.ui.right.addEventListener("focusout", () => setTimeout(() => { if (D && D.dirty) drawInspector(); }, 0));
   if (HY.full) HY.full(true);   // the library folds while the editor is open, it comes back on Done, as for the 3D studio
   if (HY.select) HY.select([]);   // the board's selection (its bar, the card's corners) stays off the page being edited
@@ -128,37 +106,49 @@ async function openDev(id) {
   D.t0 = performance.now(); requestAnimationFrame(() => { const c = D && fitCam(); if (c) fly(c); });
 }
 function closeDev() {
-  if (!D) return; const d = D; D = null;
-  cancelAnimationFrame(flyRaf); clearTimeout(d.wait);
+  if (!D) return; const d = D; D = null; if (d.kh) d.kh.hide();
+  cancelAnimationFrame(flyRaf); clearTimeout(d.wait); if (d.zoom) d.zoom.detach();
   d.frame.remove(); d.el.classList.remove("plg-live", "dvlive"); document.body.classList.remove("dvedit");
-  clearTimeout(d.still); if (d.wrote) BUST.set(d.src, d.rev);   // the card's picture of the page as it is now
+  // the pins a tree row lit go dark (Esc leaves with the pointer still on that row, whose pointerleave never comes); the live points go
+  if (window.hyComments && hyComments.light) hyComments.light([]); WHERE.clear();
+  clearTimeout(d.still); if (d.wrote) C.BUST.set(d.src, d.rev);   // the card's picture of the page as it is now
   d.unplace(); d.ui.root.remove(); HY.dock(null);
   if (HY.full) HY.full(false);
   const it = HY.board.items[d.id];
-  if (it && d.wrote) { if (it.type === TYPE) card(d.el, it, d.id); else if (HY.changed) HY.changed(d.id); }   // a frame: its own plugin draws its still again
+  if (it && d.wrote) { if (it.type === TYPE) C.card(d.el, it); else if (HY.changed) HY.changed(d.id); }   // a frame: its own plugin draws its still again
   if (it && HY.select) HY.select([d.id]);
   if (it && d.prevCam) fly({ ...d.prevCam, cx: it.x + it.w / 2, cy: it.y + it.h / 2 }, 380);   // back where the board was
   HY.render(); if (HY.modeChanged) HY.modeChanged();
 }
 function setPicking(on) {
-  if (!D) return; D.picking = !!on; if (on) D.commenting = false; toPage({ a: "inspect", on: D.picking || D.commenting });
-  D.bar.querySelectorAll("[data-tool]").forEach(b => { const v = b.dataset.tool === "pick" ? D.picking : D.commenting; b.classList.toggle("on", v); b.setAttribute("aria-pressed", String(v)); });
+  if (!D) return; const was = D.picking; D.picking = !!on; if (on) D.commenting = false; toPage({ a: "inspect", on: D.picking || D.commenting });
+  D.bar.querySelectorAll("[data-tool]").forEach(b => { const v = !!(b.dataset.tool === "pick" ? D.picking : D.commenting); b.classList.toggle("on", v); b.setAttribute("aria-pressed", String(v)); });
+  if (was !== D.picking && !D.detail) drawInspector();   // its footnote says what a click in the page does now
+  if (D.picking && D.zoom) D.zoom.release();
 }
+// the dock says when the page has the zoom (owner 2026-10-08): «The page has the zoom · Esc to give it back»
+function drawZoom(own) { const h = D && D.bar.querySelector(".dvzh"); if (h) h.classList.toggle("on", !!own); }
 // Comments on the page's elements (owner 2026-10-07: «чтобы я мог добавлять либо поверх картинки статичной, либо еще как»): the Comment tool
 // (C) makes a click in the page pin a thread to the element under it (Hyimg's ui/comments.js): its key in the tree, a css selector, its tag
 // and text, the point in the page; the pin follows the element in the live page (the page reports where its elements are) and stands at
 // that point of the card's still on the board. Draw (P) is the board's Annotate over the page, anchored to the card
 function setCommenting(on) {
-  if (!D) return; D.commenting = !!on; if (on) D.picking = false; setPicking(D.picking);
+  if (!D) return; if (on && !D.commenting) D.pickWas = D.picking;   // Esc gives back the tool before it
+  D.commenting = !!on; if (on) D.picking = false; setPicking(D.picking);
   if (on) HY.toast(t("Click an element of the page to comment on it"), "info");
 }
 function comment(d) {
   const it = HY.board.items[D.id], el = cardEl(D.id), C = window.hyComments; if (!it || !el || !C || !C.newAt || !d.el) return;
   const s = it.w / vwOf(it), [vx, vy] = d.vp || [0, 0], [px, py] = d.pt || [vx, vy];
   const p = { x: it.x + vx * s, y: it.y + vy * s }, at = [Math.min(1, Math.max(0, px / vwOf(it))), Math.min(.98, Math.max(0, py / vhOf(it)))];
-  C.newAt(p, { anchor: { obj: D.id, kind: "html", file: it.src, r: [it.x, it.y, it.w, it.h] }, at, element: { ...d.el, page: d.pt } });
+  const n = d.n, id = D.id;   // a comment from the tree (agent.js spot): cancelled, the boxes the page scrolled to show its element go back
+  const cancel = n ? () => { if (D && D.id === id) toPage({ a: "unspot", n }); } : null;
+  C.newAt(p, { anchor: { obj: D.id, kind: "html", file: it.src, r: [it.x, it.y, it.w, it.h] }, at, element: { ...d.el, page: d.pt, ...(d.pin ? { pin: d.pin } : {}) },
+    ...(cancel ? { cancel } : {}) });
 }
-// the pins of this page's elements: where the page says they are now (null: scrolled out of sight), the card's share at rest
+// the pins of this page's elements: the point the page gives (agent.js «One rule», the same a new comment from the tree takes), scaled to
+// the card; out of sight (a scroller, a slider, the page scrolled past it) no pin, but a thread made at the edge stays on it; at rest the
+// card's share
 const WHERE = new Map();
 function watchPins() {
   const C = window.hyComments; if (!D || !C || !C.threads) return;
@@ -167,9 +157,9 @@ function watchPins() {
 }
 function pinAt(th) {
   if (!D || !th.element || !th.anchor || th.anchor.obj !== D.id || !WHERE.has(th.element.key)) return undefined;
-  const r = WHERE.get(th.element.key), it = HY.board.items[D.id]; if (!r || !it) return null;
-  const s = it.w / vwOf(it), x = r[0] + Math.min(r[2] - 4, 12), y = r[1] + Math.min(r[3], 8);
-  return x < 0 || y < 0 || x > vwOf(it) || y > vhOf(it) ? null : { x: it.x + x * s, y: it.y + y * s };
+  const p = WHERE.get(th.element.key), it = HY.board.items[D.id];
+  if (!p || !it || (p[2] && th.element.pin !== "edge")) return null;
+  const s = it.w / vwOf(it); return { x: it.x + p[0] * s, y: it.y + p[1] * s };
 }
 // the selection: one element, or ⇧ adds and takes away one (the primary is the last one added)
 function select(i, scroll, add) {
@@ -193,7 +183,8 @@ function typeText(d) {
 function wrote() {
   if (!D) return; D.wrote = true; drawBar();
   clearTimeout(D.still); const d = D;
-  D.still = setTimeout(() => { BUST.set(d.src, d.rev); fetch(`/thumb?p=${enc(d.src)}&s=640&v=${d.rev}`).catch(() => {}); }, 1500);
+  D.still = setTimeout(() => { C.BUST.set(d.src, d.rev); const it = HY.board.items[d.id];
+    if (it && it.type === TYPE) fetch(C.stillUrl(it, d.el._s || 640)).catch(() => {}); }, 1500);
 }
 function drawBar() {
   if (!D) return;
@@ -210,11 +201,15 @@ addEventListener("message", e => {
       D.info = { title: d.title, vw: d.vw, vh: d.vh }; D.open = new Set(); const r = d.tree.root;
       if (r) { D.open.add(r.i); (r.k || []).forEach(k => { if (k.t === "body") { D.open.add(k.i); } }); }
       setPicking(D.picking); EDITS.load(); D.watching = null; watchPins();   // a page (again): the select tool as it was, the file's source, the pins
+      if (D.zoom) D.zoom.release();   // and the zoom the board's
     }
     drawTree(); if (!D.detail) drawInspector();
   }
   if ("hover" in d) { D.ui.tree.querySelectorAll(".row.hov").forEach(r => r.classList.remove("hov")); if (d.hover) { const r = D.ui.tree.querySelector(`.row[data-i="${d.hover}"]`); if (r) r.classList.add("hov"); } }
   if (d.where) { for (const [k, r] of Object.entries(d.where)) WHERE.set(k, r); if (window.hyComments) hyComments.draw(); }
+  if (d.zoom && typeof d.zoom === "object" && D.zoom) D.zoom.wheel(d.zoom);   // checked there: numbers in range only
+  if (d.press === 1 && !D.picking && !D.commenting && D.zoom) D.zoom.enter();
+  if (d.spot) { TC.spot(d.spot); return; }   // where a comment from the tree goes (treecomments.js)
   if (d.pick && D.commenting) { comment(d); return; }
   if (d.pick) { (d.path || []).slice(0, -1).forEach(i => D.open.add(i)); select(d.pick, false, d.shift); }
   if (d.dbl) { (d.path || []).slice(0, -1).forEach(i => D.open.add(i)); if (D.sel !== d.dbl) select(d.dbl); typeText(d.detail); }
@@ -233,7 +228,7 @@ function buildUI() {
   const root = document.createElement("div"); root.className = "dvui";
   root.innerHTML = `
     <div class="dvp dvl" data-hyui><div class="lhd"><label class="hy-search">${svg(IC.find, 15)}<input data-q type="search" placeholder="${esc(t("Find element"))}" aria-label="${esc(t("Find element"))}" autocomplete="off" spellcheck="false"></label></div>
-      <div class="dvh"><span>${esc(t("Elements"))}</span><span class="cnt"></span></div><div class="dvt" role="tree" aria-label="${esc(t("Elements"))}"></div></div>
+      <div class="dvh"><span>${esc(t("Elements"))}</span><span class="cnt"></span></div><div class="dvt" role="tree" tabindex="0" aria-label="${esc(t("Elements"))}"></div></div>
     <div class="dvp dvr" data-hyui><div class="ih"></div><div class="inf"></div></div>`;
   document.body.appendChild(root);
   const q = s => root.querySelector(s);
@@ -257,33 +252,43 @@ function buildUI() {
   q("[data-q]").addEventListener("input", e => { D.q = e.target.value.trim(); drawTree(); });
   q("[data-q]").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Escape") { if (e.target.value) { e.target.value = ""; D.q = ""; drawTree(); } else e.target.blur(); } });
   const tree = ui.tree;
-  tree.addEventListener("pointerover", e => { const r = e.target.closest(".row"); if (!r || r._hl) return; tree.querySelectorAll(".row.hov").forEach(x => { x.classList.remove("hov"); x._hl = false; }); r.classList.add("hov"); r._hl = true; toPage({ a: "hl", i: +r.dataset.i }); });
-  tree.addEventListener("pointerleave", () => { tree.querySelectorAll(".row.hov").forEach(x => { x.classList.remove("hov"); x._hl = false; }); toPage({ a: "hl", i: null }); });
+  tree.addEventListener("pointerover", e => {
+    const r = e.target.closest(".row"); if (!r || r._hl) return;
+    tree.querySelectorAll(".row.hov").forEach(x => { x.classList.remove("hov"); x._hl = false; }); r.classList.add("hov"); r._hl = true; toPage({ a: "hl", i: +r.dataset.i });
+    TC.hover(r);   // its pins lit on the board, the comment button on it
+  });
+  tree.addEventListener("pointerleave", () => { tree.querySelectorAll(".row.hov").forEach(x => { x.classList.remove("hov"); x._hl = false; }); toPage({ a: "hl", i: null }); TC.hover(null); });
   tree.addEventListener("click", e => {
+    if (TC.click(e)) return;   // a row's comment button or its count (treecomments.js)
     const r = e.target.closest(".row"); if (!r) return; const i = +r.dataset.i;
     if (e.target.closest(".chev")) { D.open.has(i) ? D.open.delete(i) : D.open.add(i); return drawTree(); }
     select(i, true, e.shiftKey);
   });
   // a row's right click: the app's menu (the board's #ctx) with the notes' colours, «no colour» first (owner 2026-10-07: «в layers при нажатии
-  // правой кнопки добавить colors как в notes ... и так в любых»); the tree picks one element at a time, so the colour goes to that row
+  // правой кнопки добавить colors как в notes ... и так в любых»); the tree picks one element at a time, so the colour goes to that row;
+  // then «Comment» on its element (owner 2026-10-08, treecomments.js)
   tree.addEventListener("contextmenu", e => {
     const r = e.target.closest(".row[data-p]"), m = document.getElementById("ctx");
     e.preventDefault(); e.stopPropagation(); if (!r || !m || !window.hyMenuColors || !window.hyColorPick) return;
-    const key = r.dataset.p;
-    m.innerHTML = hyMenuColors(colorsOf()[key] || "");
-    m.onclick = ev => { const c = hyColorPick(ev); if (c === null) return; m.classList.remove("open"); setColor(key, c); };
+    const key = r.dataset.p, i = +r.dataset.i;
+    m.innerHTML = hyMenuColors(colorsOf()[key] || "") + TC.item();
+    m.onclick = ev => {
+      if (ev.target.closest('[data-act="comment"]')) { m.classList.remove("open"); TC.start(i); return; }
+      const c = hyColorPick(ev); if (c === null) return; m.classList.remove("open"); setColor(key, c);
+    };
     m.classList.add("open");
     m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + "px"; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + "px";
   });
-  tree.addEventListener("dblclick", e => { const r = e.target.closest(".row"); if (!r || e.target.closest(".chev")) return; const i = +r.dataset.i; D.open.has(i) ? D.open.delete(i) : D.open.add(i); drawTree(); });
+  tree.addEventListener("dblclick", e => { const r = e.target.closest(".row"); if (!r || e.target.closest(".chev, .dvcb, .dvcn")) return; const i = +r.dataset.i; D.open.has(i) ? D.open.delete(i) : D.open.add(i); drawTree(); });
   // the dock: Select, Undo, Redo, Reload, Open, Done (the board's own dock, in its look)
   const bar = document.createElement("span"); bar.className = "dvbar";
-  bar.innerHTML = `<button data-tool="pick" aria-pressed="true" class="on" title="${esc(t("Select elements in the page; off, the page takes the clicks · I"))}" aria-label="${esc(t("Select"))}">${svg(IC.pick, 17)}<kbd>I</kbd></button>`
+  bar.innerHTML = `<button data-tool="pick" aria-pressed="false" title="${esc(t("Select elements in the page; off, the page takes the clicks · I"))}" aria-label="${esc(t("Select"))}">${svg(IC.pick, 17)}<kbd>I</kbd></button>`
     + `<button data-tool="comment" aria-pressed="false" title="${esc(t("Comment on an element: click it in the page · C"))}" aria-label="${esc(t("Comment"))}">`
     + `${svg("comment", 17)}<kbd>C</kbd></button>`
     + (window.hyAnnot ? `<button data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
     + `<button data-a="undo" disabled title="${esc(t("Undo the last edit of the file · ⌘Z"))}" aria-label="${esc(t("Undo"))}">${svg("undo", 17)}</button>`
     + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button><span class="sep"></span>`
+    + `<span class="dvzh" role="status">${esc(t("The page has the zoom · Esc to give it back"))}</span>`
     + (liveOf(D.id) ? `<button class="wide" data-a="live" title="${esc(t("The frame's live view: device sizes, its edges resize the page"))}">${esc(t("Live view"))}</button>` : "")
     + `<button class="wide" data-a="reload" title="${esc(t("Reload the page"))}">${esc(t("Reload"))}</button><button class="wide" data-a="open" title="${esc(t("Open the page alone in a new tab, still sandboxed"))}">${esc(t("Open"))}</button>`
     + `<button class="wide pri" data-a="done" title="${esc(t("Done · Esc"))}">${esc(t("Done"))}</button>`;
@@ -330,6 +335,7 @@ function drawTree() {
   const box = D.ui.tree, cnt = D.ui.left.querySelector(".cnt"), T = D.tree;
   if (!T || !T.root) { box.innerHTML = `<div class="dnone">${esc(D.info.none ? t("The page did not answer: it may block scripts") : t("Loading the page…"))}</div>`; cnt.textContent = ""; return; }
   cnt.textContent = t("{n} elements", { n: T.n });
+  TC.count();   // the threads on this page's elements, by row (treecomments.js)
   const q = D.q.toLowerCase(); let keep = null;
   if (q) {
     keep = new Set();
@@ -345,12 +351,14 @@ function drawTree() {
     const tint = hex ? ` hy-rc" style="--hy-rc:${hex}` : "";   // the row's colour: a stripe on its left (Hyimg ui/menu.js .hy-rc)
     out.push(`<div class="row${D.sels.has(n.i) ? " sel" : ""}${kids && !open ? " closed" : ""}${tint}" data-i="${n.i}" data-p="${esc(key)}" role="treeitem" aria-level="${depth + 1}"`
       + `${kids ? ` aria-expanded="${open}"` : ""}${D.sels.has(n.i) ? ' aria-selected="true"' : ""}>`
-      + `${'<span class="g"></span>'.repeat(depth)}${kids ? `<button class="chev" tabindex="-1" aria-hidden="true">${CHEV()}</button>` : '<span class="chev"></span>'}<span class="nm">${label(n)}</span></div>`);
+      + `${'<span class="g"></span>'.repeat(depth)}${kids ? `<button class="chev" tabindex="-1" aria-hidden="true">${CHEV()}</button>` : '<span class="chev"></span>'}<span class="nm">${label(n)}</span>`
+      + `${TC.mark(key, !!kids && !open)}</div>`);
     if (open) n.k.forEach((k, j) => walk(k, depth + 1, `${key}>${k.t}:${j}`));
   };
   walk(T.root, 0, T.root.t);
   box.innerHTML = (out.length ? out.join("") : `<div class="dnone">${esc(t("Nothing found"))}</div>`)
     + (more ? `<div class="dnone">${esc(t("{n} more rows: narrow the search", { n: more }))}</div>` : "") + (T.cut ? `<div class="dnone">${esc(t("Only the first {n} elements", { n: T.n }))}</div>` : "");
+  TC.place();
 }
 function kv(k, v, mono) { return `<div class="dkv"><span class="dk">${esc(k)}</span><span class="dv${mono ? " dmono" : ""}">${v}</span></div>`; }
 function drawInspector() {
@@ -364,7 +372,9 @@ function drawInspector() {
     head.innerHTML = `${svg(IC.code, 15, "dic")}<div><b>${esc(t("Page"))}</b><span>${esc(D.info.title || "")}</span></div>`;
     inf.innerHTML = `<div class="dsec">${kv(t("Page"), esc(it.src || ""), true)}${kv(t("Viewport"), `${D.info.vw || vwOf(it)} × ${D.info.vh || vhOf(it)}`)}${D.tree ? kv(t("Elements"), esc(String(D.tree.n))) : ""}</div>`
       + `<p class="hy-hint dhint">${D.srcErr ? t("<b>Can't save</b> this file: {why}", { why: esc(D.srcErr) })
-        : t("<b>Click</b> an element in the page or the tree to edit it, <b>⇧</b> adds one")}</p>`;   /* the app's footnote (ui/look.css .hy-hint) */
+        : D.picking ? t("<b>Click</b> an element in the page or the tree to edit it, <b>⇧</b> adds one")
+        : t("The page takes the clicks: <b>I</b> turns on Select to pick its elements, or pick one in the tree")}</p>`   /* the app's footnote (ui/look.css .hy-hint) */
+      + (D.picking ? "" : `<p class="hy-hint dhint">${t("Pinch zooms the board, after a click in the page the page; <b>Esc</b> undoes the click, <b>⌥</b> skips it")}</p>`);
     return;
   }
   const n = 1 + D.more.length;
@@ -383,19 +393,26 @@ function onKey(e) {
     if (!e.altKey && /^[zZяЯ]$/.test(e.key) && (e.shiftKey ? D.future.length : D.past.length)) { e.preventDefault(); (e.shiftKey ? EDITS.redo : EDITS.undo)(); return true; }
     return false;
   }
-  if (e.key === "Escape") {   // Esc steps out: the comment tool, the selection, then Dev mode
-    if (e.preventDefault) e.preventDefault();
-    if (D.commenting) setPicking(true); else if (D.sels.size) unselect(); else closeDev();
+  if (e.key === "Escape") {   // Esc steps out: an open comment thread, the comment tool, the page's zoom, the selection, then Dev mode
+    if (e.preventDefault) e.preventDefault(); if (D.kh) D.kh.used("back");   // a key from inside the page comes here, not to the hint
+    if (window.hyComments && hyComments.escape && hyComments.escape()) return true;   // a thread opened from a pin or a row's count
+    if (D.commenting) { D.commenting = false; setPicking(!!D.pickWas); } else if (D.zoom && D.zoom.owns) D.zoom.release(); else if (D.sels.size) unselect(); else closeDev();
     return true;
   }
   if (e.key === "Enter" && D.detail) { e.preventDefault(); typeText(D.detail); return true; }
-  if ((e.key === "i" || e.key === "I" || e.key === "ш" || e.key === "Ш") && !e.altKey) { e.preventDefault(); setPicking(!D.picking); return true; }
-  if (/^[cCсС]$/.test(e.key) && !e.altKey) { e.preventDefault(); setCommenting(!D.commenting); return true; }
+  if ((e.key === "i" || e.key === "I" || e.key === "ш" || e.key === "Ш") && !e.altKey) { e.preventDefault(); if (D.kh) D.kh.used("pick"); setPicking(!D.picking); return true; }
+  if (/^[cCсС]$/.test(e.key) && !e.altKey) {   // the tree has the focus and a row: a comment on its element (treecomments.js); else the Comment tool
+    e.preventDefault(); if (D.kh) D.kh.used("comment");
+    if (D.sel && D.ui.tree.contains(document.activeElement)) TC.start(D.sel); else setCommenting(!D.commenting);
+    return true;
+  }
   return true;   // nothing else of the board while Dev mode is open (Delete must not remove the card)
 }
 
 export function register(hy) {
   HY = hy; t = translator(hy);
+  C = makeCards(hy, { mark, pathUrl, vwOf, vhOf, devId: () => D && D.id });
+  TC = makeTreeComments({ D: () => D, HY: hy, t: (k, v) => t(k, v), esc, toPage, select, comment, drawTree });
   EDITS = makeEdits({ D: () => D, toPage, t: (k, v) => t(k, v), toast: (m, k) => HY.toast(m, k), plugin: PLUGIN, reload: () => reload(),
     changed: w => { if (w) wrote(); drawBar(); drawInspector(); } });
   const st = document.createElement("style"); st.textContent = CSS_EDIT + `
@@ -403,7 +420,7 @@ export function register(hy) {
     .plg[data-type=${TYPE}] img.dvi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; pointer-events: none; }
     .plg[data-type=${TYPE}] iframe.dvp { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #fff; pointer-events: none; opacity: 0; transition: opacity .25s cubic-bezier(.32,.72,0,1); }
     .plg[data-type=${TYPE}].pv iframe.dvp { opacity: 1; }
-    .plg.dvlive { overflow: hidden !important; outline: calc(2px / var(--z)) solid var(--sel) !important; }
+    .plg.dvlive { overflow: hidden !important; }   /* no outline (owner 2026-10-08): the board lifts the card with a shadow instead */
     .plg.dvlive > :not(iframe.dvf) { visibility: hidden; }
     .plg.dvlive iframe.dvf { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #fff; visibility: visible; }
     body.dvedit #info { display: none !important; }
@@ -431,6 +448,8 @@ export function register(hy) {
     .dvt .chev .hy-chev { width: 12px; height: 12px; transition: transform .32s cubic-bezier(.32,.72,0,1); }
     .dvt .row:not(.closed) .chev .hy-chev { transform: rotate(90deg); }
     .dvt .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px/1 ui-monospace, "SF Mono", Menlo, monospace; }
+    /* a row's comments (treecomments.js): the count opens them, the button starts one; a folded row with threads further in, a dot */
+    .dvt .row .dvcn, .dvt .row .dvcb, .dvt .row .dvcd { margin-left: auto; } .dvt .row .dvcb + .dvcn { margin-left: 0; } .dvt .row .dvcn { color: var(--sel); } .dvt .row .dvcd { margin-right: 6px; }
     .dvt .dtg { color: var(--ink); } .dvt .dia { color: #e8a24a; } .dvt .dic { color: #7dbbf5; } .dvt .dtx { color: var(--muted); margin-left: 8px; font-family: var(--sans, system-ui); }
     :root[data-theme=light] .dvt .dia { color: #b06a10; } :root[data-theme=light] .dvt .dic { color: #1f6fc0; }
     .dvr .ih { display: flex; align-items: center; gap: 8px; min-height: var(--hy-trow-h, 28px); padding: 10px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--paper, var(--panel)); z-index: 2; }
@@ -448,6 +467,10 @@ export function register(hy) {
     .dvr .dsw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 25%, transparent); }
     .dvr .dnote { color: var(--muted); font-size: 12px; margin: 8px 6px; line-height: 1.45; } .dvr .dhint { margin: 10px 6px; }
     #dock .dvbar { display: contents; }
+    /* «the page has the zoom»: the words open in the dock while it lasts, the one sign of it (nothing on the card) */
+    #dock .dvzh { max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; flex: none; font: 500 12px var(--sans, system-ui); color: var(--sub);
+      transition: max-width .4s cubic-bezier(.32,.72,0,1), opacity .25s cubic-bezier(.32,.72,0,1), padding .4s cubic-bezier(.32,.72,0,1); }
+    #dock .dvzh.on { max-width: 340px; opacity: 1; padding: 0 8px; }
     body.dvedit #ctx { z-index: 70; } #ctx > .msw:only-child { margin-bottom: 0; border-bottom: 0; }   /* the right-click menu over the panels */`;
   document.head.appendChild(st);
   hy.register(TYPE, {
@@ -455,28 +478,23 @@ export function register(hy) {
     render(el, it, id) {
       id = id || el.dataset.id;
       if (D && D.id === id) { if (D.frame && !el.contains(D.frame)) el.appendChild(D.frame); if (D.frame) sizeTo(D.frame, it); return; }
-      card(el, it, id);
+      C.card(el, it);
     },
-    view(id, el, px, moving) {
-      if (D && D.id === id) return;
-      const it = HY.board.items[id]; if (!it) return;
-      if (px >= BIG && !moving && !el._pv) preview(id, el, it);
-      else if (el._pv && px < SMALL) unpreview(id, el);
-    },
+    view: (id, el, px, moving) => C.view(id, el, px, moving),   // the still as sharp as the card is big, the live pages (cards.js)
     resized(id) { const el = cardEl(id), it = HY.board.items[id]; if (el && it && el._pv) sizeTo(el._pv, it); },
     dblclick(id) { openDev(id); },
     onKey,
     info(id, it) {
       return { name: it.src.split("/").pop(), meta: `HTML · ${vwOf(it)}×${vhOf(it)} · ${it.src}`,
-        text: t("Double-click or Dev in the dock to edit the page") };
+        text: t("Double-click or Dev Studio in the dock to edit the page") };
     },
   });
   if (hy.restored) hy.restored(() => { if (D) drawTree(); });   // the board's undo takes a row's colour back
   // an HTML file of the library dropped on the board is a page card, 1280 × 800 like the picture the library shows of it
   if (hy.placeAs) hy.placeAs(p => /\.html?$/i.test(p) ? { type: TYPE, src: p, vw: VW, ar: VW / VH, pics: [p] } : null);
-  if (hy.mode) hy.mode("dev", { label: t("Dev"), order: 20, icon: svg(IC.code),
-    title: t("Dev mode for the selected HTML card: the page's tree, the live page, the inspector"), hint: t("Select an HTML card or enter one: Dev mode opens for it"),
-    isOpen: () => !!D,
+  if (hy.mode) hy.mode("dev", { label: t("Dev"), name: t("Dev Studio"), order: 20, icon: svg(IC.code),
+    title: t("Dev Studio for the selected HTML card: the page's tree, the live page, the inspector"), hint: t("Select an HTML card or enter one: Dev Studio opens for it"),
+    isOpen: () => !!D, card: () => D && D.id,
     target: ids => { const it = ids.length === 1 && HY.board.items[ids[0]], el = it && cardEl(ids[0]); return isPage(it) && !(it.type === FRAME_TYPE && el && el.classList.contains("plg-live")) ? ids[0] : null; },
     enter: id => openDev(id),
     leave: () => closeDev(),
@@ -485,8 +503,9 @@ export function register(hy) {
   // зашел»), through the board's generic hook; its live view stays one click away: «Live view» in Dev mode's dock, the bar over the frame.
   // Not while the frame is live already (the page takes the clicks then). With this plugin off the frame opens its live view, as before
   if (hy.opener) hy.opener(FRAME_TYPE, id => { const el = cardEl(id); if (!isPage(HY.board.items[id]) || (el && el.classList.contains("plg-live"))) return false; openDev(id); return true; });
-  addEventListener("hy-comments", watchPins);   // a thread added or gone: the page is asked where its elements are
+  addEventListener("hy-comments", () => { watchPins(); TC.refresh(); });   // a thread added or gone: the page is asked where its elements are, the rows' counts
+  addEventListener("hy-comment-open", e => TC.opened(e));   // a pin opened on the board selects its row (Hyimg ui/comments.js)
   if (window.hyComments && hyComments.position) hyComments.position(pinAt);
   else addEventListener("load", () => { if (window.hyComments && hyComments.position) hyComments.position(pinAt); }, { once: true });
-  window.__dev = { openDev, closeDev, select, setPicking, get D() { return D; }, LIVE, BUST, get EDITS() { return EDITS; } };
+  window.__dev = { openDev, closeDev, select, setPicking, get D() { return D; }, get LIVE() { return C.LIVE; }, get BUST() { return C.BUST; }, C, get EDITS() { return EDITS; } };
 }

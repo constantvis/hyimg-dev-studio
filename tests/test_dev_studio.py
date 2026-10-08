@@ -86,7 +86,8 @@ def board(p, port, browser="chromium", size=(1400, 900)):
 
 
 def modes(page):
-    return page.evaluate("Object.fromEntries([...document.querySelectorAll('#modes > button')].map(b => [b.dataset.mode, (b.getAttribute('aria-pressed') === 'true' ? 'on' : b.getAttribute('aria-disabled') === 'true' ? 'off' : 'can')]))")
+    return page.evaluate("Object.fromEntries([...document.querySelectorAll('#modes > button')].map(b => [b.dataset.mode, "
+                         "(b.getAttribute('aria-pressed') === 'true' ? 'on' : b.getAttribute('aria-disabled') === 'true' ? 'off' : 'can')]))")
 
 
 def pick(page, ids):
@@ -152,12 +153,13 @@ def test_mode_switch_follows_selection_and_editors(hy):
         assert modes(page)["dev"] == "on" and modes(page)["board"] == "can"
         page.click("#modes [data-mode=board]")
         page.wait_for_function("() => !__dev.D && !document.querySelector('.dvui') && !document.querySelector('.plg[data-id=h1] iframe.dvf')")
-        assert modes(page)["board"] == "on"
+        # the switch follows on the next frame (hyimg ui/modes.js sync() by requestAnimationFrame since d91e3c3): wait for it, not read it at once
+        page.wait_for_function("() => document.querySelector('#modes [data-mode=board]').getAttribute('aria-pressed') === 'true'")
         # the segment enters it; Esc (two steps: the selected element, then Dev) leaves it
         pick(page, ["h1"]); page.click("#modes [data-mode=dev]")
         page.wait_for_function("() => __dev.D && __dev.D.tree", timeout=15000)
-        page.keyboard.press("Escape"); page.wait_for_timeout(150)
-        assert modes(page)["board"] == "on" and not page.evaluate("!!__dev.D")
+        page.keyboard.press("Escape")
+        page.wait_for_function("() => !__dev.D && document.querySelector('#modes [data-mode=board]').getAttribute('aria-pressed') === 'true'")
         # 3D: the segment opens the 3D studio for the selected card, Board closes it as its Done does
         pick(page, ["m1"]); page.click("#modes [data-mode=\"3d\"]")
         page.wait_for_function("() => document.body.classList.contains('m3edit')", timeout=30000)
@@ -166,13 +168,16 @@ def test_mode_switch_follows_selection_and_editors(hy):
         page.click("#modes [data-mode=board]")
         page.wait_for_function("() => !document.body.classList.contains('m3edit')", timeout=10000)
         page.wait_for_function("() => document.querySelector('#modes [data-mode=board]').getAttribute('aria-pressed') === 'true'")
-        # Image: a picture becomes a frame of its own (one step to undo) and the image studio opens for it; Board leaves it
-        pick(page, ["i0"]); page.click("#modes [data-mode=image]")
+        # Image: the picture becomes a frame of its own under its id, in place, with no step in the board's history until the first Save
+        # (hyimg-frames a9ed877 and 2abd6b8, owner 2026-10-07: the studio on a picture leaves the board as it was unless saved; before, a new
+        # frame with a new id replaced it as one undo step); the image studio opens for it; Board leaves it and the picture is back
+        pick(page, ["i0"]); past = page.evaluate("past.length"); page.click("#modes [data-mode=image]")
         page.wait_for_function("() => window.__frames && __frames.ED && __frames.ED.win", timeout=30000)
         page.wait_for_function("() => document.querySelector('#modes [data-mode=image]').getAttribute('aria-pressed') === 'true'")
-        assert page.evaluate("Object.values(board.items).some(it => it.type === 'imgframe') && !board.items.i0")
+        assert page.evaluate("[board.items.i0.type, board.items.i0.pics, past.length]") == ["imgframe", ["a/0.png"], past]
         page.click("#modes [data-mode=board]")
         page.wait_for_function("() => !__frames.ED", timeout=10000)
+        page.wait_for_function("() => !board.items.i0.type && board.items.i0.path === 'a/0.png'")
         page.wait_for_function("() => document.querySelector('#modes [data-mode=board]').getAttribute('aria-pressed') === 'true'")
         assert not errors, errors
         br.close()
@@ -206,8 +211,11 @@ def test_dev_mode_tree_page_and_inspector(hy, browser):
         assert [d["box"]["w"], d["box"]["h"]] == want and dict(d["styles"])["font-size"] == "48px" and ["id", "t"] in d["attrs"]
         txt = page.inner_text(".dvr")
         assert "h1" in txt and "48px" in txt and "#t" in txt
-        # the select tool, on when Dev mode opens: a click in the page selects its element in the tree (and never reaches the page)
-        assert page.evaluate("__dev.D.picking") and page.get_attribute(".dvbar [data-tool=pick]", "aria-pressed") == "true"
+        # the select tool, off when Dev mode opens (owner 2026-10-08), I turns it on: a click in the page selects its element in the tree
+        # (and never reaches the page)
+        assert not page.evaluate("__dev.D.picking") and page.get_attribute(".dvbar [data-tool=pick]", "aria-pressed") == "false"
+        page.evaluate("document.activeElement && document.activeElement.blur()"); page.keyboard.press("i")
+        page.wait_for_function("() => __dev.D.picking"); assert page.get_attribute(".dvbar [data-tool=pick]", "aria-pressed") == "true"
         box = page.locator(".plg[data-id=h1] iframe.dvf").bounding_box()
         x, y = frame.evaluate("(() => { const r = document.getElementById('b').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2] })()")
         s = box["width"] / 1280
@@ -255,7 +263,7 @@ def test_drop_from_library_makes_a_page_card_with_a_live_preview(hy):
         assert f.get_attribute("sandbox") == "allow-scripts" and page.evaluate("getComputedStyle(document.querySelector('.plg[data-id=h1] iframe.dvp')).pointerEvents") == "none"
         page.evaluate("HY.camera(-40, 360, 0.2, false)")
         page.wait_for_function("() => !document.querySelector('.plg iframe.dvp')", timeout=10000)
-        assert page.evaluate("document.querySelector('.plg[data-id=h1] img.dvi').src").endswith("s=640")
+        page.wait_for_function("() => document.querySelector('.plg[data-id=h1] img.dvi:not(.dvo)').src.endsWith('s=640')", timeout=10000)   # small again: the small still
         assert not errors, errors
         br.close()
 
@@ -265,7 +273,7 @@ def test_russian_words(hy):
     port, lib, state = hy
     with sync_playwright() as p:
         br, page, errors = board(p, port)
-        assert page.evaluate("[...document.querySelectorAll('#modes > button')].map(e => e.getAttribute('aria-label'))") == ["Доска", "Картинка", "Дев", "3D"]
+        assert page.evaluate("[...document.querySelectorAll('#modes > button')].map(e => e.getAttribute('aria-label'))") == ["Доска", "Image Studio", "Dev Studio", "3D Studio"]   # the studios' names (owner 2026-10-08)
         page.dblclick(".plg[data-id=h1]"); page.wait_for_function("() => __dev.D && __dev.D.tree", timeout=20000)
         assert page.get_attribute(".dvl input[data-q]", "placeholder") == "Найти элемент" and "Готово" in page.inner_text(".dvbar")
         page.click(".dvt .row:has(.dtg:text-is('body'))"); page.wait_for_function("() => __dev.D.detail")

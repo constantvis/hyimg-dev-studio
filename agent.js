@@ -8,13 +8,20 @@
 //
 // To the board, {hydev: 1, ...}: ready + tree, tree (again when the page changes, at most once a second), hover, pick {pick, shift, path,
 // detail} (a press with the select tool), dbl {dbl, detail} (a double click), detail (the selected element) + more (the other selected
-// ones), text {i, was, text} (typing in place ended), key: "Escape" | "z" (with shift) | "Enter" | "c" | "p"; a pick carries the element's
+// ones), text {i, was, text} (typing in place ended), key: "Escape" | "z" (with shift) | "Enter" | "i" | "c" | "p"; a pick carries the element's
 // key («html>body:1>main:0», the tree's row path), a css selector, its tag and text and the press's point in the page (pt) and the
-// viewport (vp), so a comment can be pinned to it; where {key: [x, y, w, h] in the viewport | null} answers "where" (and again on scroll).
+// viewport (vp), so a comment can be pinned to it; where {key: [x, y] | [x, y, 1] | null}, its pin's point in the viewport, answers "where"
+// (and again on scroll).
 // From the board, {hydev: 2, a}: "tree"; "hl" {i | null}; "sel" {i, all, scroll}; "inspect" {on}: the select tool (a press picks instead
 // of reaching the page); "marks" {on}; "source" {html, rev}: the file's source with each start tag marked by its offset (data-hy-at);
 // "live" {ops}: an edit shown in the page ({i, style: {prop: value | ""}}, {i, text}, {var, value}); "type" {i}: typing in place;
-// "where" {keys}: the boxes of these elements now, and after each scroll or resize until asked for other keys.
+// "where" {keys}: the pins' points of these elements now (see «One rule» below), and after each scroll or resize until asked for other
+// keys; "zoom" {on}: the page has the zoom (the person clicked into it), its pinch stays its own; "spot" {i}: where a comment on that
+// element goes, answered {spot: {i, el, pt, vp, n, pin?}} as a pick (a comment from the board's tree, treecomments.js); "unspot" {n}:
+// that comment was cancelled, the boxes its spot scrolled go back.
+// Zoom (owner 2026-10-08, Hyimg ui/framezoom.js): a pinch, ⌃ or ⌘ with the wheel go to the board as {zoom: {x, y, dx, dy, mode, ctrl, meta}}
+// and never zoom the page, unless the page has the zoom or ⌥ is held; a press while the select tool is off sends {press: 1} (it gives the
+// page the zoom). The page cannot pinch-zoom its own viewport by touch either (touch-action, in a sheet of ours outside the DOM).
 // A tree node: {i: id, t: tag, d: its id attribute, c: classes, x: the text of a leaf, k: children}; at most 15000 elements (cut: true).
 //
 // Where an element is in the file: the source is parsed by the browser's own parser (DOMParser, no scripts run) and its tree lined up
@@ -30,7 +37,17 @@
   const idOf = n => { let i = ids.get(n); if (!i) { i = next++; ids.set(n, i); nodes.set(i, new WeakRef(n)); } return i; };
   const byId = i => { const r = nodes.get(i), n = r && r.deref(); return n && n.isConnected ? n : null; };
   const send = m => { try { UP.postMessage(Object.assign({ hydev: 1 }, m), "*"); } catch (e) { /* the board is gone */ } };
-  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0;
+  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, zoomOwn = false;
+  // the zoom goes to the board (see the top): registered first, so the page's own listeners never see a gesture that is not theirs
+  const zopt = { capture: true, passive: false };
+  addEventListener("wheel", e => {
+    if (!(e.ctrlKey || e.metaKey) || e.altKey || zoomOwn) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    send({ zoom: { x: e.clientX, y: e.clientY, dx: e.deltaX, dy: e.deltaY, mode: e.deltaMode, ctrl: e.ctrlKey, meta: e.metaKey } });
+  }, zopt);
+  ["gesturestart", "gesturechange", "gestureend"].forEach(t => addEventListener(t, e => { if (!e.altKey && !zoomOwn) { e.preventDefault(); e.stopImmediatePropagation(); } }, zopt));
+  addEventListener("pointerdown", () => { if (!inspecting && !editing) send({ press: 1 }); }, { capture: true });
+  try { const zs = new CSSStyleSheet(); zs.replaceSync("html { touch-action: pan-x pan-y; }"); document.adoptedStyleSheets = [...document.adoptedStyleSheets, zs]; } catch (e) { /* an old engine */ }
   const mine = n => n === host || (n.tagName === "SCRIPT" && /\/~hyp\//.test(n.getAttribute("src") || ""));
   const clsOf = el => (el.getAttribute("class") || "").replace(/\s+/g, " ").trim();
 
@@ -72,12 +89,84 @@
     return p.join(" > ");
   };
   const where = el => ({ key: keyOf(el), css: cssOf(el), tag: el.tagName.toLowerCase(), text: (el.textContent || "").replace(/\s+/g, " ").trim().slice(0, 80) });
+  // an element's box in the viewport for its pin: its own, its contents' when it draws none (display: contents: pin "kids"), its nearest
+  // ancestor's when it is not drawn at all (display: none: pin "parent"); on: the element that box belongs to, to scroll into sight
+  const boxOf = el => {
+    if (el.getClientRects().length) return { r: el.getBoundingClientRect(), on: el };
+    try {
+      const rg = document.createRange(); rg.selectNodeContents(el); const r = rg.getBoundingClientRect();
+      const on = [...el.querySelectorAll("*")].find(x => x.getClientRects().length);
+      if ((r.width || r.height) && on) return { r, on, pin: "kids" };
+    } catch (e) { /* no ranges */ }
+    for (let a = el.parentElement; a; a = a.parentElement) if (a.getClientRects().length) return { r: a.getBoundingClientRect(), on: a, pin: "parent" };
+    return null;
+  };
+  // One rule for where a pin stands on an element, in the page (owner 2026-10-08: «в дереве я точно так же смогу нажать и оставить
+  // комментарий»): a point inside the part of its box one can see, the middle of a small one, 12 and 8 px in from the top left of a big
+  // one (as the board's pin stands on it). The live pins (where) and a new comment (spot) both take it. "Seen" is at least 8 px of the box
+  // each way, or all of a smaller one: a row flush with its list's bottom edge, or a slide flush with its slider's right one, is out of
+  // sight. Out of sight, the nearest point in sight, marked edge; null when its clipping boxes are out of the viewport themselves
+  const clipIn = (a, memo) => {   // what clips a's contents: the viewport cut by a and every ancestor of it that clips its overflow
+    if (!a || a === document.documentElement) return { l: 0, t: 0, r: innerWidth, b: innerHeight };
+    if (memo && memo.has(a)) return memo.get(a);
+    const c = { ...clipIn(a.parentElement, memo) }, s = getComputedStyle(a), x = s.overflowX !== "visible", y = s.overflowY !== "visible";
+    if (x || y) {
+      const q = a.getBoundingClientRect(), l = q.left + a.clientLeft, t = q.top + a.clientTop;
+      if (x) { c.l = Math.max(c.l, l); c.r = Math.min(c.r, l + a.clientWidth); }
+      if (y) { c.t = Math.max(c.t, t); c.b = Math.min(c.b, t + a.clientHeight); }
+    }
+    if (memo) memo.set(a, c);
+    return c;
+  };
+  const inside = (l, t, w, h) => [l + Math.min(w / 2, 12), t + Math.min(h / 2, 8)];
+  const enough = (v, d) => v >= Math.min(d, 8);   // d = 0: a box with no width (or height) is seen when it lies inside the clip
+  function sight(el, memo) {
+    const b = boxOf(el); if (!b) return null;
+    const c = clipIn(b.on.parentElement, memo), r = b.r, l = Math.max(r.left, c.l), t = Math.max(r.top, c.t);
+    const w = Math.min(r.right, c.r) - l, h = Math.min(r.bottom, c.b) - t;
+    if (enough(w, r.width) && enough(h, r.height)) return { b, p: inside(l, t, w, h) };
+    if (c.r - c.l < 1 || c.b - c.t < 1) return { b, p: null };
+    const [x, y] = inside(r.left, r.top, r.width, r.height), fit = (v, lo, hi) => Math.min(Math.max(v, lo), hi - 1);
+    return { b, p: [fit(x, c.l, c.r), fit(y, c.t, c.b)], edge: true };
+  }
+  // where {key: [x, y] | [x, y, 1] (out of sight, the nearest point in sight) | null} in the viewport: the board scales it to the card
   let WATCH = [], wraf = 0;
   const sendWhere = () => {
-    wraf = 0; const out = {};
-    for (const k of WATCH) { const el = byKey(k), r = el && el.getBoundingClientRect(); out[k] = r ? [r.left, r.top, r.width, r.height] : null; }
+    wraf = 0; const out = {}, memo = new Map();
+    for (const k of WATCH) { const el = byKey(k), s = el && sight(el, memo); out[k] = s && s.p ? (s.edge ? [s.p[0], s.p[1], 1] : s.p) : null; }
     send({ where: out });
   };
+  // where the pin of a comment from the board's tree goes: the point above; out of sight, the element is scrolled into it first (its
+  // scrollers and the page); still out of sight, the nearest point in sight (pin "edge"). The answer is what a click on the element with
+  // the Comment tool sends, and n: the scroll offsets it changed are given back by unspot n when the comment is cancelled (an overflow:
+  // hidden slider cannot be scrolled back by hand), each only while the box is still where the comment left it
+  const UNDO = new Map(); let spots = 0;
+  function spot(el) {
+    let s = sight(el); if (!s) return null;
+    const n = ++spots;
+    if (!s.p || s.edge) {
+      const on = s.b.on, all = [document.scrollingElement || document.documentElement];
+      for (let a = on.parentElement; a; a = a.parentElement) if (a !== all[0]) all.push(a);
+      const was = all.map(a => [a.scrollLeft, a.scrollTop]);
+      try { on.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" }); } catch (e) { on.scrollIntoView(false); }
+      const moved = all.map((a, k) => ({ a, from: was[k], to: [a.scrollLeft, a.scrollTop] })).filter(m => m.from[0] !== m.to[0] || m.from[1] !== m.to[1]);
+      if (moved.length) { UNDO.set(n, moved); for (const k of UNDO.keys()) if (UNDO.size > 8) UNDO.delete(k); }
+      s = sight(el) || s;
+    }
+    let p = s.p, pin = s.b.pin || "";
+    if (!p || s.edge) {
+      pin = "edge";
+      if (!p) { const r = s.b.r, [x, y] = inside(r.left, r.top, r.width, r.height); p = [Math.min(Math.max(x, 0), innerWidth - 1), Math.min(Math.max(y, 0), innerHeight - 1)]; }
+    }
+    return Object.assign({ el: where(el), vp: p, pt: [p[0] + scrollX, p[1] + scrollY], n }, pin ? { pin } : {});
+  }
+  function unspot(n) {
+    const moved = UNDO.get(n); UNDO.delete(n); if (!moved) return;
+    for (const m of moved) {
+      if (Math.abs(m.a.scrollLeft - m.to[0]) > 1 || Math.abs(m.a.scrollTop - m.to[1]) > 1) continue;   // the person scrolled it since
+      try { m.a.scrollTo({ left: m.from[0], top: m.from[1], behavior: "instant" }); } catch (e) { m.a.scrollLeft = m.from[0]; m.a.scrollTop = m.from[1]; }
+    }
+  }
   const watchLater = () => { if (WATCH.length && !wraf) wraf = requestAnimationFrame(sendWhere); };
   addEventListener("scroll", watchLater, { passive: true, capture: true }); addEventListener("resize", watchLater);
 
@@ -338,6 +427,7 @@
       place(); sendSel();
     }
     else if (d.a === "marks") { if (host) host.style.display = d.on ? "" : "none"; }
+    else if (d.a === "zoom") zoomOwn = !!d.on;
     else if (d.a === "inspect") { ensure(); inspecting = !!d.on; catcher().style.display = inspecting && !editing ? "block" : "none"; if (!inspecting) { hov = null; place(); } }
     else if (d.a === "source" && typeof d.html === "string") {
       try { SRC = { doc: new DOMParser().parseFromString(d.html, "text/html"), rev: d.rev }; epoch++; } catch (x) { SRC = null; }
@@ -346,8 +436,10 @@
     else if (d.a === "live") live(d.ops);
     else if (d.a === "type") type(d.i);
     else if (d.a === "where") { WATCH = (d.keys || []).slice(0, 200).map(String); sendWhere(); }
+    else if (d.a === "spot") { const el = byId(d.i); send({ spot: Object.assign({ i: d.i }, el && spot(el)) }); }
+    else if (d.a === "unspot") unspot(d.n);
   });
-  // keys the board takes while the page has the focus: Esc, ⌘Z and ⇧⌘Z, Enter to type a selected text; never while the page's own field has it
+  // keys the board takes while the page has the focus: Esc, ⌘Z and ⇧⌘Z, I, Enter to type a selected text; never while the page's own field has it
   addEventListener("keydown", e => {
     if (editing) return;
     const a = document.activeElement, field = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
@@ -355,7 +447,8 @@
     else if (field) return;
     else if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "z" || e.key === "я" || e.key === "Z")) { e.preventDefault(); send({ key: "z", shift: e.shiftKey }); }
     else if (e.key === "Enter" && inspecting && sel) { e.preventDefault(); send({ key: "Enter" }); }
-    else if (inspecting && !e.metaKey && !e.ctrlKey && !e.altKey && /^[iIшШ]$/.test(e.key)) { e.preventDefault(); send({ key: "i" }); }
+    // I turns the select tool on and off also while the page takes the clicks (it opens so, owner 2026-10-08), unless one of its fields is typed in
+    else if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[iIшШ]$/.test(e.key)) { e.preventDefault(); send({ key: "i" }); }
     else if (inspecting && !e.metaKey && !e.ctrlKey && !e.altKey && /^[cCсСpPзЗ]$/.test(e.key)) {   // C a comment on an element, P draw over the page
       e.preventDefault(); send({ key: /^[cCсС]$/.test(e.key) ? "c" : "p" }); }
   }, true);

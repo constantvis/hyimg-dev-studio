@@ -32,11 +32,19 @@ def test_the_manifest_gives_html_files_to_this_server_module():
     assert man["server"] == "server.py" and man["kinds"] == {"html": [".html", ".htm"]}
 
 
-def test_a_page_is_drawn_by_render_py_at_1280_by_800_with_this_python(server, runs, tmp_path):
+def test_a_page_is_drawn_by_render_py_at_1280_by_800_twice_as_sharp_with_this_python(server, runs, tmp_path):
     page = tmp_path / "site" / "index.html"
     server.preview(str(page), str(tmp_path / "k.png"))
-    assert runs[0]["args"] == [sys.executable, str(ROOT / "render.py"), page.as_uri(), "1280", "800", str(tmp_path / "k.png")]
+    # scale 2: a 2560 × 1600 picture, for a card zoomed in on a Retina screen (2026-10-08)
+    assert runs[0]["args"] == [sys.executable, str(ROOT / "render.py"), page.as_uri(), "1280", "800", str(tmp_path / "k.png"), "2"]
     assert runs[0]["kw"] == {"capture_output": True, "timeout": 60}
+    assert server.PREVIEW_KEY == "2x"   # Hyimg names these pictures apart from the 1280 ones drawn before, so those are drawn again
+
+
+def test_a_card_of_its_own_viewport_is_drawn_at_it(server, runs, tmp_path):
+    page = tmp_path / "site" / "index.html"
+    server.preview_at(str(page), str(tmp_path / "k.png"), 1440, 900)   # a 1440 card: its live page's layout, at twice the size
+    assert runs[0]["args"][3:] == ["1440", "900", str(tmp_path / "k.png"), "2"]
 
 
 def test_a_path_with_spaces_and_cyrillic_becomes_a_well_formed_file_url(server, runs, tmp_path):
