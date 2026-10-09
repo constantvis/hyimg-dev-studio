@@ -76,7 +76,7 @@ def test_a_tree_row_takes_a_colour_kept_on_the_card(hy, browser):
                 page.screenshot(path=os.path.join(SHOTS, f"colors-dev-{th}-{browser}.png"))
             page.evaluate("() => delete document.documentElement.dataset.theme")
         # the colour survives Done, a reload of the board and Dev mode again; the page's file never changes
-        page.click(".dvbar [data-a=done]"); page.wait_for_function("() => !__dev.D")
+        page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D")
         page.wait_for_timeout(800); page.reload()
         page.wait_for_function("() => typeof PLGST !== 'undefined' && PLGST.some(x => x.name === 'dev' && x.ok)", timeout=30000)
         open_dev(page)

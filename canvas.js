@@ -80,6 +80,10 @@ function fitCam() {
   return { x: it.x - (x0 + (x1 - x0 - it.w * z) / 2) / z, y: it.y - (y0 + (y1 - y0 - it.h * z) / 2) / z, z, cx: it.x + it.w / 2, cy: it.y + it.h / 2 };
 }
 const toPage = m => { if (D && D.frame && D.frame.contentWindow) D.frame.contentWindow.postMessage(Object.assign({ hydev: 2 }, m), "*"); };
+// the marks in the page (agent.js: the hover, the pick, its label) in Dev Studio's green, the light theme's when the board is light (owner
+// 2026-10-09, the picked element in blue: «опять мы что-то выделяем, у нас это синего цвета вместо зеленого»)
+const accent = () => toPage({ a: "accent", c: getComputedStyle(document.documentElement).getPropertyValue("--dev").trim() });
+new MutationObserver(() => { if (D) accent(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
 const KEYHINT = [{ id: "pick", keys: ["i"], t: "Select an element" }, { id: "comment", keys: ["c"], t: "Comment" }, { id: "back", keys: ["escape"], t: "Back" }];
 async function openDev(id) {
@@ -97,8 +101,9 @@ async function openDev(id) {
   D.zoom = window.hyFrameZoom ? hyFrameZoom.attach(f, { card: el, changed: own => { toPage({ a: "zoom", on: own }); drawZoom(own); } }) : null;
   D.wait = setTimeout(() => { if (D && !D.tree) { D.info.none = true; drawTree(); } }, 6000);
   D.ui = buildUI(); HY.dock(D.bar); drawBar();
-  // the studio's keys over the dock (Hyimg ui/hy/keyhint.js, owner 2026-10-08): I picks an element, C comments, Esc steps out (onKey)
-  if (window.hyKeyHint) D.kh = window.hyKeyHint.show(document.getElementById("dock") || el, "dev", KEYHINT, { place: "above" });
+  // the studio's keys in the Hint bar, top centre as it opens, gone once one is used (Hyimg ui/hy/keyhint.js place "top", owner 2026-10-09):
+  // I picks an element, C comments, Esc steps out (onKey)
+  if (window.hyKeyHint) D.kh = window.hyKeyHint.show(document.getElementById("dock") || el, "dev", KEYHINT, { place: "top" });
   D.ui.right.addEventListener("focusout", () => setTimeout(() => { if (D && D.dirty) drawInspector(); }, 0));
   if (HY.full) HY.full(true);   // the library folds while the editor is open, it comes back on Done, as for the 3D studio
   if (HY.select) HY.select([]);   // the board's selection (its bar, the card's corners) stays off the page being edited
@@ -200,7 +205,7 @@ addEventListener("message", e => {
     if (d.ready) {
       D.info = { title: d.title, vw: d.vw, vh: d.vh }; D.open = new Set(); const r = d.tree.root;
       if (r) { D.open.add(r.i); (r.k || []).forEach(k => { if (k.t === "body") { D.open.add(k.i); } }); }
-      setPicking(D.picking); EDITS.load(); D.watching = null; watchPins();   // a page (again): the select tool as it was, the file's source, the pins
+      setPicking(D.picking); EDITS.load(); D.watching = null; watchPins(); accent();   // a page (again): the select tool, the source, the pins, the marks' colour
       if (D.zoom) D.zoom.release();   // and the zoom the board's
     }
     drawTree(); if (!D.detail) drawInspector();
@@ -227,9 +232,9 @@ addEventListener("message", e => {
 function buildUI() {
   const root = document.createElement("div"); root.className = "dvui";
   root.innerHTML = `
-    <div class="dvp dvl" data-hyui><div class="lhd"><label class="hy-search">${svg(IC.find, 15)}<input data-q type="search" placeholder="${esc(t("Find element"))}" aria-label="${esc(t("Find element"))}" autocomplete="off" spellcheck="false"></label></div>
-      <div class="dvh"><span>${esc(t("Elements"))}</span><span class="cnt"></span></div><div class="dvt" role="tree" tabindex="0" aria-label="${esc(t("Elements"))}"></div></div>
-    <div class="dvp dvr" data-hyui><div class="ih"></div><div class="inf"></div></div>`;
+    <div class="dvp dvl hy-blk" data-hyui><div class="lhd"><label class="hy-search">${svg(IC.find, 15)}<input data-q type="search" placeholder="${esc(t("Find element"))}" aria-label="${esc(t("Find element"))}" autocomplete="off" spellcheck="false"></label></div>
+      <div class="dvh hy-sh"><span>${esc(t("Elements"))}</span><span class="cnt hy-sh-n"></span></div><div class="dvt" role="tree" tabindex="0" aria-label="${esc(t("Elements"))}"></div></div>
+    <div class="dvp dvr hy-blk" data-hyui><div class="ih"></div><div class="inf"></div></div>`;
   document.body.appendChild(root);
   const q = s => root.querySelector(s);
   const ui = { root, left: q(".dvl"), right: q(".dvr"), tree: q(".dvt") };
@@ -280,31 +285,33 @@ function buildUI() {
     m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + "px"; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + "px";
   });
   tree.addEventListener("dblclick", e => { const r = e.target.closest(".row"); if (!r || e.target.closest(".chev, .dvcb, .dvcn")) return; const i = +r.dataset.i; D.open.has(i) ? D.open.delete(i) : D.open.add(i); drawTree(); });
-  // the dock: Select, Undo, Redo, Reload, Open, Done (the board's own dock, in its look)
+  // the dock: Select, Comment, Draw, Undo, Redo (the board's own dock, in its look); Live view, Reload, Open in <Browser> and Done stand
+  // top right, Hyimg's one place for a Studio's session actions (ui/hy/actions.js; owner 2026-10-09: «кнопки Done у нас всегда
+  // стандартизированы справа вверху, а не внизу»)
   const bar = document.createElement("span"); bar.className = "dvbar";
   bar.innerHTML = `<button data-tool="pick" aria-pressed="false" title="${esc(t("Select elements in the page; off, the page takes the clicks · I"))}" aria-label="${esc(t("Select"))}">${svg(IC.pick, 17)}<kbd>I</kbd></button>`
     + `<button data-tool="comment" aria-pressed="false" title="${esc(t("Comment on an element: click it in the page · C"))}" aria-label="${esc(t("Comment"))}">`
     + `${svg("comment", 17)}<kbd>C</kbd></button>`
     + (window.hyAnnot ? `<button data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
     + `<button data-a="undo" disabled title="${esc(t("Undo the last edit of the file · ⌘Z"))}" aria-label="${esc(t("Undo"))}">${svg("undo", 17)}</button>`
-    + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button><span class="sep"></span>`
-    + `<span class="dvzh" role="status">${esc(t("The page has the zoom · Esc to give it back"))}</span>`
-    + (liveOf(D.id) ? `<button class="wide" data-a="live" title="${esc(t("The frame's live view: device sizes, its edges resize the page"))}">${esc(t("Live view"))}</button>` : "")
-    + `<button class="wide" data-a="reload" title="${esc(t("Reload the page"))}">${esc(t("Reload"))}</button><button class="wide" data-a="open" title="${esc(t("Open the page alone in a new tab, still sandboxed"))}">${esc(t("Open"))}</button>`
-    + `<button class="wide pri" data-a="done" title="${esc(t("Done · Esc"))}">${esc(t("Done"))}</button>`;
+    + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button>`
+    + `<span class="dvzh" role="status">${esc(t("The page has the zoom · Esc to give it back"))}</span>`;
   bar.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || !D) return;
     if (b.dataset.tool === "pick") return setPicking(!D.picking);
     if (b.dataset.tool === "comment") return setCommenting(!D.commenting);
     if (b.dataset.a === "draw" && window.hyAnnot) return hyAnnot.tool("pen");
-    if (b.dataset.a === "live") { const id = D.id; closeDev(); HY.ownOpen(id); return; }   // the frame's own live view (the frames plugin)
-    if (b.dataset.a === "reload") reload();
     if (b.dataset.a === "undo") EDITS.undo();
     if (b.dataset.a === "redo") EDITS.redo();
-    if (b.dataset.a === "open") window.open(D.frame.src.replace(/\?.*$/, ""), "_blank", "noopener");
-    if (b.dataset.a === "done") closeDev();
   });
   D.bar = bar;
+  // Live view (the frames plugin's own view of its HTML frame), Reload, Open in <Browser> (the page alone, still sandboxed), Done
+  const acts = document.createElement("hy-studio-actions"); root.appendChild(acts);
+  const live = { id: "live", label: t("Live view"), tip: t("The frame's live view: device sizes, its edges resize the page"),
+    run: () => { if (!D) return; const id = D.id; closeDev(); HY.ownOpen(id); } };
+  acts.actions = [...(liveOf(D.id) ? [live] : []), { id: "reload", label: t("Reload"), tip: t("Reload the page"), run: () => reload() },
+    { id: "open", open: () => (D ? D.frame.src.replace(/\?.*$/, "") : ""), tip: t("Open the page alone in a new tab, still sandboxed") },
+    { id: "done", label: t("Done"), tip: t("Done"), key: "Esc", primary: true, run: () => closeDev() }];
   return ui;
 }
 
@@ -380,9 +387,9 @@ function drawInspector() {
   const n = 1 + D.more.length;
   head.innerHTML = `${svg(IC.tag, 15, "dic")}<div><b>${esc(d.t)}</b><span>${esc(n > 1 ? t("{n} elements", { n }) : (d.d ? "#" + d.d : "") + (d.c.length ? "." + d.c.join(".") : ""))}</span></div>`;
   const swatch = v => /^(rgb|#|hsl|oklch|color)/.test(v) ? `<i class="dsw" style="background:${esc(v)}"></i>` : "";
-  inf.innerHTML = drawEdit(D, t, svg) + `<div class="dsec"><div class="dsh">${esc(t("Box"))}</div>${kv(t("Size"), `${d.box.w} × ${d.box.h}`)}${kv(t("Position"), `${d.box.x}, ${d.box.y}`)}${kv(t("Children"), String(d.kids))}</div>`
-    + `<div class="dsec"><div class="dsh">${esc(t("Styles"))} <small>${esc(t("computed"))}</small></div>${d.styles.map(([k, v]) => kv(k, swatch(v) + esc(v), true)).join("")}</div>`
-    + `<div class="dsec"><div class="dsh">${esc(t("Attributes"))}</div>${d.attrs.length ? d.attrs.map(([k, v]) => kv(k, esc(v), true)).join("") : `<p class="dnote">${esc(t("none"))}</p>`}</div>`;
+  inf.innerHTML = drawEdit(D, t, svg) + `<div class="dsec"><div class="dsh hy-sh">${esc(t("Box"))}</div>${kv(t("Size"), `${d.box.w} × ${d.box.h}`)}${kv(t("Position"), `${d.box.x}, ${d.box.y}`)}${kv(t("Children"), String(d.kids))}</div>`
+    + `<div class="dsec"><div class="dsh hy-sh">${esc(t("Styles"))} <small>${esc(t("computed"))}</small></div>${d.styles.map(([k, v]) => kv(k, swatch(v) + esc(v), true)).join("")}</div>`
+    + `<div class="dsec"><div class="dsh hy-sh">${esc(t("Attributes"))}</div>${d.attrs.length ? d.attrs.map(([k, v]) => kv(k, esc(v), true)).join("") : `<p class="dnote">${esc(t("none"))}</p>`}</div>`;
   wire(inf, D, EDITS, t);
 }
 
@@ -416,25 +423,40 @@ export function register(hy) {
   EDITS = makeEdits({ D: () => D, toPage, t: (k, v) => t(k, v), toast: (m, k) => HY.toast(m, k), plugin: PLUGIN, reload: () => reload(),
     changed: w => { if (w) wrote(); drawBar(); drawInspector(); } });
   const st = document.createElement("style"); st.textContent = CSS_EDIT + `
-    .plg[data-type=${TYPE}] { background: var(--raise); overflow: hidden; }
+    .plg[data-type=${TYPE}] { background: var(--raise); overflow: hidden; --dv-page: #fff; }   /* a page's own ground when it sets none */
     .plg[data-type=${TYPE}] img.dvi { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top; pointer-events: none; }
-    .plg[data-type=${TYPE}] iframe.dvp { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #fff; pointer-events: none; opacity: 0; transition: opacity .25s cubic-bezier(.32,.72,0,1); }
-    .plg[data-type=${TYPE}].pv iframe.dvp { opacity: 1; }
+    /* the live page at rest (cards.js): .dvpg, not .dvp, the panels' class: their z-index 60 lay the page over the card's marks, the
+       notes' dots and the ♥ of a card big enough to be live (owner 2026-10-08: «почему у HTML точки не появляется сверху?») */
+    .plg[data-type=${TYPE}] iframe.dvpg { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: var(--dv-page); pointer-events: none; opacity: 0; transition: opacity .25s cubic-bezier(.32,.72,0,1); }
+    .plg[data-type=${TYPE}].pv iframe.dvpg { opacity: 1; }
     .plg.dvlive { overflow: hidden !important; }   /* no outline (owner 2026-10-08): the board lifts the card with a shadow instead */
     .plg.dvlive > :not(iframe.dvf) { visibility: hidden; }
     .plg.dvlive iframe.dvf { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #fff; visibility: visible; }
     body.dvedit #info { display: none !important; }
-    /* the panels are the media library's panel (as the 3D studio's, owner 2026-10-06: «make all ui consistant»): the paper, a hairline,
-       18 px corners (14 px in «pro»); ⌘. hides them with the board's interface (data-hyui), each toward its own edge */
+    /* the panels are blocks of the app, round 12 «A · Line» (owner 2026-10-09: «реализуй уже A Line версию на весь интерфейс»): Hyimg
+       ui/hy/block.css draws their surface, the sections' heads and the wells; ⌘. hides them with the board's interface (data-hyui), each
+       toward its own edge */
+    /* Dev Studio wears its colour, its green (--dev, the owner's glossary of modes, Concepts/html/editors-concepts/_shared/gloss.css), in
+       both looks (owner 2026-10-09, «конечно» to «3D Studio и Dev Studio пока остаются синими. Дать им их цвета?»; as Image Studio's purple,
+       hyimg-frames 6e04f1a, and 3D Studio's pink): every chosen, checked or primary thing of the studio (the picked row, a chosen option, a
+       value's fill, the tool in hand and Done in the dock) and the Dev segment of the dock's switch (HY.mode color). On the board's root
+       because the dock reads it; the light value is the same hue darker, 3.2:1 on the light paper and 4:1 under white words. Blue stays the
+       board's selection; the tree's tag, attribute and class colours are the code's own */
+    :root { --dev: #2fae6a; } :root[data-theme="light"] { --dev: #279058; }
+    .dvui { --sel: var(--dev); --hy-sel: var(--dev); --hy-acc: var(--dev); --hy-tint-bg: color-mix(in srgb, var(--dev) 16%, transparent); --hy-tint-ink: var(--dev);
+      --hy-trow-on: color-mix(in srgb, var(--dev) 14%, transparent); --hy-trow-ring: inset 0 0 0 1px color-mix(in srgb, var(--dev) 55%, transparent);
+      --hy-val: color-mix(in srgb, var(--dev) 30%, transparent); --hy-val-drag: color-mix(in srgb, var(--dev) 44%, transparent);
+      --hy-val-on: color-mix(in srgb, var(--dev) 30%, var(--hy-well)); --hy-val-ink: color-mix(in srgb, var(--dev) 14%, var(--ink)); }
+    .dvr hy-segmented[variant=well].seg > .st, .dvr hy-segmented[variant=well]:not(.has-st) > button.on { background: var(--hy-val-on); box-shadow: none; }
+    .dvr hy-segmented[variant=well] > button.on { color: var(--hy-val-ink); }
+    #dock .plgdock.dvbar button:is(.on, .pri) { background: var(--dev) !important; color: var(--hy-on-accent, #fff) !important; }   /* over canvas.html's ink */
     .dvui { --dv-r: var(--hy-trow-r, 8px); color: var(--ink); font: 400 13px/1.4 var(--sans, system-ui); }
-    .dvp { position: fixed; z-index: 60; background: var(--paper, var(--panel)); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--plate-sh, 0 16px 50px rgba(0,0,0,.35)); box-sizing: border-box; }
-    :root[data-shape=pro] .dvp { border-radius: 14px; }
+    .dvp { position: fixed; z-index: 60; box-shadow: var(--plate-sh, 0 16px 50px rgba(0,0,0,.35)); }
     .dvl { --hx: -16px; left: var(--l); top: var(--t); bottom: var(--b); width: 260px; display: flex; flex-direction: column; padding: 8px 8px 6px; overflow: hidden; }
     .dvr { --hx: 18px; right: var(--r); top: var(--t); bottom: var(--b); width: 290px; overflow: auto; overscroll-behavior: contain; }
     .dvl, .dvr { transition: left var(--inset-ms, 0ms) cubic-bezier(.32,.72,0,1), right var(--inset-ms, 0ms) cubic-bezier(.32,.72,0,1); }
     .dvl .lhd { display: flex; flex: none; padding-bottom: 6px; } .dvl .lhd .hy-search > input { color: var(--ink); }
-    .dvl .dvh { flex: none; display: flex; align-items: center; height: 30px; padding: 0 8px 0 6px; font: 600 11px var(--sans, system-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--sub); }
-    .dvl .dvh .cnt { margin-left: auto; letter-spacing: 0; text-transform: none; font-weight: 500; color: var(--muted); }
+    .dvl .dvh { cursor: default; }   /* the tree's title: a section's head of the app (.hy-sh), its count at the right end */
     .dvt { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; scrollbar-width: none; }
     .dvt::-webkit-scrollbar { display: none; }
     .dvt .dnone { color: var(--muted); padding: 12px 8px; font-size: 12px; }
@@ -452,13 +474,12 @@ export function register(hy) {
     .dvt .row .dvcn, .dvt .row .dvcb, .dvt .row .dvcd { margin-left: auto; } .dvt .row .dvcb + .dvcn { margin-left: 0; } .dvt .row .dvcn { color: var(--sel); } .dvt .row .dvcd { margin-right: 6px; }
     .dvt .dtg { color: var(--ink); } .dvt .dia { color: #e8a24a; } .dvt .dic { color: #7dbbf5; } .dvt .dtx { color: var(--muted); margin-left: 8px; font-family: var(--sans, system-ui); }
     :root[data-theme=light] .dvt .dia { color: #b06a10; } :root[data-theme=light] .dvt .dic { color: #1f6fc0; }
-    .dvr .ih { display: flex; align-items: center; gap: 8px; min-height: var(--hy-trow-h, 28px); padding: 10px 14px; border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--paper, var(--panel)); z-index: 2; }
+    .dvr .ih { display: flex; align-items: center; gap: 8px; min-height: var(--hy-trow-h, 28px); padding: 10px 14px 6px; position: sticky; top: 0; background: var(--hy-blk); z-index: 2; }
     .dvr .ih .dic { color: var(--sub); flex: none; } .dvr .ih div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
     .dvr .ih b { font: 600 13px ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); flex: none; } .dvr .ih span { color: var(--muted); font: 12px ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dvr .inf { padding: 4px 8px 16px; }
-    .dvr .dsec { padding: 6px 0 4px; } .dvr .dsec + .dsec { border-top: 1px solid var(--line); }
-    .dvr .dsh { height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 6px; font: 600 11px var(--sans, system-ui); letter-spacing: .06em; text-transform: uppercase; color: var(--sub); }
-    .dvr .dsh small { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--muted); }
+    .dvr .dsec { padding: 6px 0 4px; } .dvr .dsec + .dsec { border-top: 1px solid var(--hy-pline); }   /* Line: a hairline between two sections */
+    .dvr .dsh small { font: 400 11px var(--sans, system-ui); color: var(--muted); }   /* .dsh is a section's head of the app (.hy-sh) */
     .dvr .dkv { display: flex; align-items: baseline; gap: 10px; min-height: 24px; padding: 3px 6px; border-radius: var(--dv-r); }
     .dvr .dkv:hover { background: var(--hy-trow-hover, var(--raise)); }
     .dvr .dkv .dk { flex: 0 0 104px; color: var(--sub); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -492,7 +513,8 @@ export function register(hy) {
   if (hy.restored) hy.restored(() => { if (D) drawTree(); });   // the board's undo takes a row's colour back
   // an HTML file of the library dropped on the board is a page card, 1280 × 800 like the picture the library shows of it
   if (hy.placeAs) hy.placeAs(p => /\.html?$/i.test(p) ? { type: TYPE, src: p, vw: VW, ar: VW / VH, pics: [p] } : null);
-  if (hy.mode) hy.mode("dev", { label: t("Dev"), name: t("Dev Studio"), order: 20, icon: svg(IC.code),
+  // color: the chosen segment in Dev Studio's green, not the board's blue (owner 2026-10-09: «конечно», to giving Dev Studio its colour)
+  if (hy.mode) hy.mode("dev", { label: t("Dev"), name: t("Dev Studio"), order: 20, icon: svg(IC.code), color: "var(--dev)",
     title: t("Dev Studio for the selected HTML card: the page's tree, the live page, the inspector"), hint: t("Select an HTML card or enter one: Dev Studio opens for it"),
     isOpen: () => !!D, card: () => D && D.id,
     target: ids => { const it = ids.length === 1 && HY.board.items[ids[0]], el = it && cardEl(ids[0]); return isPage(it) && !(it.type === FRAME_TYPE && el && el.classList.contains("plg-live")) ? ids[0] : null; },

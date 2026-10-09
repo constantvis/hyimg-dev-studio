@@ -15,6 +15,8 @@
 // From the board, {hydev: 2, a}: "tree"; "hl" {i | null}; "sel" {i, all, scroll}; "inspect" {on}: the select tool (a press picks instead
 // of reaching the page); "marks" {on}; "source" {html, rev}: the file's source with each start tag marked by its offset (data-hy-at);
 // "live" {ops}: an edit shown in the page ({i, style: {prop: value | ""}}, {i, text}, {var, value}); "type" {i}: typing in place;
+// "accent" {c}: the colour of the marks, Dev Studio's green as the board resolves it (a CSS colour; owner 2026-10-09, the picked element in
+// blue: «у нас это синего цвета вместо зеленого»), the dark green until it comes;
 // "where" {keys}: the pins' points of these elements now (see «One rule» below), and after each scroll or resize until asked for other
 // keys; "zoom" {on}: the page has the zoom (the person clicked into it), its pinch stays its own; "spot" {i}: where a comment on that
 // element goes, answered {spot: {i, el, pt, vp, n, pin?}} as a pick (a comment from the board's tree, treecomments.js); "unspot" {n}:
@@ -37,7 +39,7 @@
   const idOf = n => { let i = ids.get(n); if (!i) { i = next++; ids.set(n, i); nodes.set(i, new WeakRef(n)); } return i; };
   const byId = i => { const r = nodes.get(i), n = r && r.deref(); return n && n.isConnected ? n : null; };
   const send = m => { try { UP.postMessage(Object.assign({ hydev: 1 }, m), "*"); } catch (e) { /* the board is gone */ } };
-  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, zoomOwn = false;
+  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, zoomOwn = false, ACC = "";
   // the zoom goes to the board (see the top): registered first, so the page's own listeners never see a gesture that is not theirs
   const zopt = { capture: true, passive: false };
   addEventListener("wheel", e => {
@@ -318,13 +320,15 @@
     if (host) return;
     host = document.createElement("hy-dev-marks");
     host.setAttribute("style", "all:initial;position:fixed;left:0;top:0;width:0;height:0;z-index:2147483647;pointer-events:none");
+    if (ACC) host.style.setProperty("--hyk", ACC);
     R = host.attachShadow({ mode: "closed" });
     R.innerHTML = `<style>
+      :host{--hyk:#2fae6a;--hyw:#fff}
       .b{position:fixed;box-sizing:border-box;pointer-events:none;display:none;border-radius:2px}
-      .h{background:rgba(10,132,255,.16);outline:1px solid rgba(10,132,255,.95)}
-      .s{outline:2px solid #0a84ff;outline-offset:-1px}
+      .h{background:color-mix(in srgb,var(--hyk) 16%,transparent);outline:1px solid color-mix(in srgb,var(--hyk) 95%,transparent)}
+      .s{outline:2px solid var(--hyk);outline-offset:-1px}
       .s.t{outline-style:dashed}
-      .l{position:fixed;display:none;font:600 11px/1 -apple-system,system-ui,sans-serif;color:#fff;background:#0a84ff;padding:4px 6px;border-radius:5px;white-space:nowrap;pointer-events:none}
+      .l{position:fixed;display:none;font:600 11px/1 -apple-system,system-ui,sans-serif;color:var(--hyw);background:var(--hyk);padding:4px 6px;border-radius:5px;white-space:nowrap;pointer-events:none}
       .c{position:fixed;inset:0;display:none;pointer-events:auto;cursor:default;background:transparent}
     </style><div class="b h"></div><div class="b s"></div><div class="l"></div><div class="c"></div>`;
     (document.documentElement || document).appendChild(host);
@@ -428,6 +432,8 @@
     }
     else if (d.a === "marks") { if (host) host.style.display = d.on ? "" : "none"; }
     else if (d.a === "zoom") zoomOwn = !!d.on;
+    else if (d.a === "accent" && typeof d.c === "string" && /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%/]+\)|color\(srgb[\d.\s/%]+\))$/i.test(d.c.trim())) {
+      ACC = d.c.trim(); if (host) host.style.setProperty("--hyk", ACC); }
     else if (d.a === "inspect") { ensure(); inspecting = !!d.on; catcher().style.display = inspecting && !editing ? "block" : "none"; if (!inspecting) { hov = null; place(); } }
     else if (d.a === "source" && typeof d.html === "string") {
       try { SRC = { doc: new DOMParser().parseFromString(d.html, "text/html"), rev: d.rev }; epoch++; } catch (x) { SRC = null; }

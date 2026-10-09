@@ -100,9 +100,9 @@ def test_annotate_over_live_html_cards_on_the_board(hy):
     with sync_playwright() as p:
         br, page, errors = board(p, port)
         # the HTML card runs its page live at this size (Dev studio's preview)
-        page.wait_for_selector(".plg[data-id=h1].pv iframe.dvp", timeout=20000)
+        page.wait_for_selector(".plg[data-id=h1].pv iframe.dvpg", timeout=20000)
         page.keyboard.press("p")
-        assert page.locator(".plg[data-id=h1] iframe.dvp").evaluate("f => getComputedStyle(f).pointerEvents") == "none"
+        assert page.locator(".plg[data-id=h1] iframe.dvpg").evaluate("f => getComputedStyle(f).pointerEvents") == "none"
         stroke(page, box(page, ".plg[data-id=h1]"))
         a = wait(lambda: get(port, "/api/annotations?name=main")["items"], "no stroke on the HTML card")[0]
         assert a["anchor"]["obj"] == "h1" and a["anchor"]["kind"] == "html" and a["anchor"]["file"] == "site/index.html"

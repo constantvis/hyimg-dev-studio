@@ -99,7 +99,7 @@ export function makeCards(HY, { mark, pathUrl, vwOf, vhOf, devId }) {
   function preview(id, el, it) {
     if (el._pv) return;
     if (!BASE) { base().then(b => { if (b) schedule(); }); return; }
-    const f = document.createElement("iframe"); f.className = "dvp"; f.setAttribute("sandbox", "allow-scripts"); f.tabIndex = -1; f.setAttribute("aria-hidden", "true");
+    const f = document.createElement("iframe"); f.className = "dvpg"; f.setAttribute("sandbox", "allow-scripts"); f.tabIndex = -1; f.setAttribute("aria-hidden", "true");
     f.addEventListener("load", () => el.classList.add("pv"), { once: true });
     sizeTo(f, it); f.src = BASE + pathUrl(it.src); el.appendChild(f); el._pv = f; LIVE.add(id);
   }

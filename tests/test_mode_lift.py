@@ -139,7 +139,7 @@ def test_dev_opens_interactive_and_i_turns_select_on(lift):
         # I again: the page takes the clicks once more; Dev mode opened again starts so, nothing is remembered for the card
         page.keyboard.press("Escape"); page.wait_for_function("() => !__dev.D.detail")
         page.keyboard.press("i"); page.wait_for_function("() => !__dev.D.picking")
-        page.click(".dvbar [data-a=done]"); page.wait_for_function("() => !__dev.D")
+        page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D")
         page.dblclick(".plg[data-id=h1]"); page.wait_for_function("() => __dev.D && __dev.D.tree", timeout=20000)
         assert page.evaluate("__dev.D.picking") is False
         assert not errors, errors
@@ -242,7 +242,7 @@ def test_zoom_over_a_live_page(lift):
         box = page.locator(".plg[data-id=h1] iframe.dvf").bounding_box()
         page.mouse.click(box["x"] + 40, box["y"] + 40); page.wait_for_timeout(300)
         assert not page.evaluate("document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
-        page.click(".dvbar [data-a=done]"); page.wait_for_function("() => !__dev.D"); page.wait_for_timeout(600)
+        page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D"); page.wait_for_timeout(600)
         # the HTML frame's live view (the frames plugin, a page of the library's origin): the same rule from the host
         page.evaluate("HY.camera(300, 300, 1, false)"); page.wait_for_timeout(300)
         page.evaluate("PLG.htmlframe.dblclick('f1')"); page.wait_for_selector(".plg[data-id=f1] iframe.hfl")
@@ -287,7 +287,7 @@ def test_enter_cost(lift, capsys):
               return t.slice(1); }""")
             m1 = {m["name"]: m["value"] for m in cdp.send("Performance.getMetrics")["metrics"]}
             for k in ("TaskDuration", "RecalcStyleDuration", "LayoutDuration"): main[on][k] = main[on].get(k, 0) + (m1[k] - m0[k]) * 1000
-            page.click(".dvbar [data-a=done]"); page.wait_for_function("() => !__dev.D"); page.wait_for_timeout(900)
+            page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D"); page.wait_for_timeout(900)
         assert not errors, errors
         br.close()
     def stats(t):

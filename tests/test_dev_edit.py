@@ -221,7 +221,7 @@ def test_edits_write_the_file_in_place_and_undo_takes_them_back(ed):
         page.evaluate("document.activeElement && document.activeElement.blur()"); page.keyboard.press("Meta+z"); file_is(f, orig)
 
         # Done: the card's picture is asked again for the file's new version
-        page.click(".dvbar [data-a=done]"); page.wait_for_function("() => !__dev.D")
+        page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D")
         page.wait_for_function("() => /&v=[0-9a-f]{40}$/.test(document.querySelector('.plg[data-id=e1] img.dvi').src)")
         assert not errors, errors
         br.close()

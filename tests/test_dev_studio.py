@@ -240,7 +240,7 @@ def test_dev_mode_tree_page_and_inspector(hy, browser):
         page.keyboard.press("Meta+Period")
         page.wait_for_function("() => !document.documentElement.classList.contains('hy-hideui')")
         # Done: everything of Dev mode goes, the card is a card again, the file never changed
-        page.click(".dvbar [data-a=done]")
+        page.click("hy-studio-actions [data-a=done]")
         page.wait_for_function("() => !__dev.D && !document.querySelector('.dvui, .plg iframe.dvf')")
         assert (lib / "site/index.html").read_text() == PAGE
         assert not errors, errors
@@ -258,11 +258,11 @@ def test_drop_from_library_makes_a_page_card_with_a_live_preview(hy):
         assert it["type"] == "html" and it["vw"] == 1280 and it["w"] == 320 and it["h"] == 200 and it["pics"] == ["site/about.htm"] and "path" not in it
         # big on screen the card runs its page (sandboxed, no pointer), small it shows the picture only
         page.evaluate("HY.camera(-40, 360, 1.6, false)")
-        page.wait_for_function("() => document.querySelector('.plg[data-id=h1] iframe.dvp')", timeout=10000)
-        f = page.locator(".plg[data-id=h1] iframe.dvp")
-        assert f.get_attribute("sandbox") == "allow-scripts" and page.evaluate("getComputedStyle(document.querySelector('.plg[data-id=h1] iframe.dvp')).pointerEvents") == "none"
+        page.wait_for_function("() => document.querySelector('.plg[data-id=h1] iframe.dvpg')", timeout=10000)
+        f = page.locator(".plg[data-id=h1] iframe.dvpg")
+        assert f.get_attribute("sandbox") == "allow-scripts" and page.evaluate("getComputedStyle(document.querySelector('.plg[data-id=h1] iframe.dvpg')).pointerEvents") == "none"
         page.evaluate("HY.camera(-40, 360, 0.2, false)")
-        page.wait_for_function("() => !document.querySelector('.plg iframe.dvp')", timeout=10000)
+        page.wait_for_function("() => !document.querySelector('.plg iframe.dvpg')", timeout=10000)
         page.wait_for_function("() => document.querySelector('.plg[data-id=h1] img.dvi:not(.dvo)').src.endsWith('s=640')", timeout=10000)   # small again: the small still
         assert not errors, errors
         br.close()
@@ -275,7 +275,7 @@ def test_russian_words(hy):
         br, page, errors = board(p, port)
         assert page.evaluate("[...document.querySelectorAll('#modes > button')].map(e => e.getAttribute('aria-label'))") == ["Доска", "Image Studio", "Dev Studio", "3D Studio"]   # the studios' names (owner 2026-10-08)
         page.dblclick(".plg[data-id=h1]"); page.wait_for_function("() => __dev.D && __dev.D.tree", timeout=20000)
-        assert page.get_attribute(".dvl input[data-q]", "placeholder") == "Найти элемент" and "Готово" in page.inner_text(".dvbar")
+        assert page.get_attribute(".dvl input[data-q]", "placeholder") == "Найти элемент" and "Готово" in page.inner_text("hy-studio-actions")
         page.click(".dvt .row:has(.dtg:text-is('body'))"); page.wait_for_function("() => __dev.D.detail")
         assert "стили" in page.inner_text(".dvr").lower()
         assert page.evaluate("window.__tMiss.filter(k => k.startsWith('dev::'))") == []
@@ -302,9 +302,9 @@ def test_preview_cost(hy, capsys):
         for live in (True, False):
             br, page, errors = board(p, port, size=(1600, 1000))
             page.evaluate("HY.camera(0, 0, 0.7, false)")
-            if not live: page.evaluate("PLG.html.view = () => {}; document.querySelectorAll('iframe.dvp').forEach(f => f.remove())")
+            if not live: page.evaluate("PLG.html.view = () => {}; document.querySelectorAll('iframe.dvpg').forEach(f => f.remove())")
             page.wait_for_timeout(2500)
-            n = page.evaluate("document.querySelectorAll('iframe.dvp').length")
+            n = page.evaluate("document.querySelectorAll('iframe.dvpg').length")
             ms = page.evaluate("""async () => { const t = []; let last = performance.now();
               for (let k = 0; k < 120; k++) { await new Promise(r => requestAnimationFrame(r)); const now = performance.now(); t.push(now - last); last = now; HY.camera(HY.cam.x + 6, HY.cam.y, HY.cam.z, true); }
               t.sort((a, b) => a - b); return { med: t[60], p95: t[114], max: t[119] }; }""")

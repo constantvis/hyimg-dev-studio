@@ -47,7 +47,7 @@ export function drawEdit(D, t, icon) {
     row += `</div>`;
     if (v) {
       const can = dv && dv.where === "root", tip = !dv ? t("{v} is declared outside this file", { v }) : dv.where !== "root" ? t("{v} is declared inside a rule Dev Studio doesn't write", { v }) : "";
-      row += `<div class="dsc"><hy-segmented variant="tint" size="s" value="${scope(prop)}" data-s="${prop}" label="${esc(v)}">`
+      row += `<div class="dsc"><hy-segmented variant="well" value="${scope(prop)}" data-s="${prop}" label="${esc(v)}">`
         + `<button value="el">${esc(t("This element"))}</button><button value="all"${can ? "" : ` disabled data-tip="${esc(tip)}" title="${esc(tip)}"`}>`
         + `${esc(t("Everywhere · {n}", { n: dv ? dv.uses : 0 }))}</button></hy-segmented></div>`;
     }
@@ -58,14 +58,14 @@ export function drawEdit(D, t, icon) {
   const set = p => P[p].set && !/^(auto|initial|inherit|unset|normal)$/.test(P[p].set);
   const layout = [set("width") ? field("width", "W", num(P.width.v)) : "", set("height") ? field("height", "H", num(P.height.v)) : "",
     field("padding", t("Padding"), P.padding.v.split(" ").map(num).join(" ")), e.flex ? field("gap", t("Gap"), num(P.gap.v.split(" ")[0])) : ""].join("");
-  const sec = (title, body, cls = "") => `<div class="dsec ded ${cls}"${off ? " inert" : ""}><div class="dsh">${esc(title)}</div>${body}</div>`;
+  const sec = (title, body, cls = "") => `<div class="dsec ded ${cls}"${off ? " inert" : ""}><div class="dsh hy-sh">${esc(title)}</div>${body}</div>`;
   const leaf = d.src && typeof d.src.text === "string";
   return (off ? `<p class="hy-hint dhint doff">${icon("lock", 13)} ${off}</p>` : leaf ? `<p class="hy-hint dhint">${t("<b>Double-click</b> the text or <b>Enter</b> to type it")}</p>` : "")
     + sec(t("Layout"), `<div class="dgrid">${layout}</div>`)
     + sec(t("Appearance"), `<div class="dop" data-p="opacity"></div><div class="dgrid">${field("border-radius", t("Corners"), num(P["border-radius"].v))}</div>`)
     + sec(t("Fill"), colorRow("background-color", t("Fill")))
     + sec(t("Text"), colorRow("color", t("Colour")) + `<div class="dgrid">${field("font-size", t("Size"), num(P["font-size"].v))}</div>`
-      + `<div class="dwt"><hy-segmented size="s" value="${esc(P["font-weight"].v)}" data-w="1" label="${esc(t("Weight"))}">`
+      + `<div class="dwt"><hy-segmented variant="well" value="${esc(P["font-weight"].v)}" data-w="1" label="${esc(t("Weight"))}">`
       + `${WEIGHTS.map(w => `<button value="${w}">${w}</button>`).join("")}</hy-segmented></div>`)
     + sec(t("Stroke"), colorRow("border-color", t("Stroke")) + `<div class="dgrid">${field("border-width", t("Width"), P["border-width"].v.split(" ").map(num).join(" "))}</div>`);
 }
@@ -124,14 +124,15 @@ export const CSS_EDIT = `
   .dvr .dsw2 { position: relative; display: inline-flex; flex: none; width: 22px; height: 22px; align-items: center; justify-content: center; }
   .dvr .dsw2 hy-swatch { pointer-events: none; }
   .dvr .dsw2 input[type=color] { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; padding: 0; opacity: 0; cursor: pointer; border: 0; }
-  .dvr .dfi { min-width: 0; flex: 1; height: 28px; box-sizing: border-box; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--hy-row-r, 999px);
-    background: transparent; color: var(--ink); font: 12px ui-monospace, "SF Mono", Menlo, monospace; outline: none;
-    transition: border-color .2s cubic-bezier(.32,.72,0,1); }
+  .dvr .dfi { min-width: 0; flex: 1; height: var(--hy-ctl-h, 24px); box-sizing: border-box; padding: 0 8px; border: 1px solid transparent; border-radius: var(--hy-row-r, 999px);
+    background: var(--hy-well, transparent); color: var(--ink); font: 12px ui-monospace, "SF Mono", Menlo, monospace; outline: none;
+    transition: border-color .2s cubic-bezier(.32,.72,0,1), background-color .2s cubic-bezier(.32,.72,0,1); }   /* a dark well (round 12) */
+  .dvr .dfi:hover { background: var(--hy-well-hov, transparent); }
   .dvr .dfi:focus { border-color: var(--sel); } .dvr .dfi.bad { border-color: var(--hy-red); }
   .dvr .dvar { flex: none; max-width: 92px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px ui-monospace, "SF Mono", Menlo, monospace;
     color: var(--ink); padding: 3px 8px; border-radius: var(--hy-row-r, 999px); background: var(--raise); }
   .dvr .dsc { padding: 2px 6px 6px 66px; } .dvr .dsc hy-segmented { width: 100%; }
-  .dvr .dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 8px; padding: 2px 6px 4px; }
+  .dvr .dgrid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--hy-gap-ctl, 4px); padding: 2px 6px 4px; }
   .dvr .dnf { display: flex; align-items: center; gap: 6px; min-width: 0; } .dvr .dnf > span { flex: none; color: var(--sub); font-size: 12px; min-width: 14px; }
   .dvr .dnf[data-p=padding] { grid-column: span 2; } .dvr .dnf[data-p=padding] > span { flex-basis: 52px; }
   .dvr .dop { padding: 2px 6px 4px; } .dvr .dwt { padding: 4px 6px 6px; } .dvr .dwt hy-segmented { width: 100%; }`;

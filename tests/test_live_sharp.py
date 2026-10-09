@@ -49,7 +49,7 @@ def open_board(p, port, size=(1800, 1000)):
 
 
 STATE = """() => Object.fromEntries([...document.querySelectorAll('.plg[data-type=html]')].map(el => {
-  const img = el.querySelector('img.dvi:not(.dvo)'), f = el.querySelector('iframe.dvp');
+  const img = el.querySelector('img.dvi:not(.dvo)'), f = el.querySelector('iframe.dvpg');
   return [el.dataset.id, { live: !!f && el.classList.contains('pv'), frame: !!f, hidden: el.hidden, still: img ? (img.currentSrc || img.src) : '',
     nat: img ? img.naturalWidth : 0 }]; }))"""
 # the cards' stills asked for since t0 (performance.now())
@@ -97,16 +97,16 @@ def test_a_card_outside_the_screen_never_takes_a_live_page_from_one_on_it(hy):
         # at 100 % two cards of the second row fill the screen; the first row's, first in the board's order, lie just above it, inside the
         # board's view pass (half a screen around): before 2026-10-08 c0, c1, c2 and c6 took the four pages and c7 on screen got none
         page.evaluate(f"HY.camera(-40, {ROW - 20}, 1, false)")
-        page.wait_for_function("() => ['c6', 'c7'].every(id => document.querySelector(`.plg[data-id=${id}] iframe.dvp`))", timeout=20000)
+        page.wait_for_function("() => ['c6', 'c7'].every(id => document.querySelector(`.plg[data-id=${id}] iframe.dvpg`))", timeout=20000)
         settle(page, 500)
         assert live() == ["c6", "c7"], (live(), page.evaluate("__dev.C.dbg"), page.evaluate("HY.cam"), on_screen(page, ["c0", "c1", "c6", "c7"]))
         # a pan up while it moves starts nothing and keeps what runs; once it stops the first row's cards take the pages, the second's go
         during = page.evaluate(f"""async () => {{ const seen = new Set();
           for (let k = 1; k <= 30; k++) {{ HY.camera(-40, {ROW - 20} - k * {2 * ROW / 30}, 1, true); await new Promise(r => requestAnimationFrame(r));
-            document.querySelectorAll('.plg iframe.dvp').forEach(f => seen.add(f.parentElement.dataset.id)); }}
+            document.querySelectorAll('.plg iframe.dvpg').forEach(f => seen.add(f.parentElement.dataset.id)); }}
           return [...seen].sort(); }}""")
         assert during == ["c6", "c7"], during
-        page.wait_for_function("() => ['c0', 'c1'].every(id => document.querySelector(`.plg[data-id=${id}] iframe.dvp`))", timeout=600)
+        page.wait_for_function("() => ['c0', 'c1'].every(id => document.querySelector(`.plg[data-id=${id}] iframe.dvpg`))", timeout=600)
         assert live() == ["c0", "c1"]
         # a card that got no page because four nearer ones had them gets one when one of them goes
         page.evaluate("HY.camera(-40, -20, 0.62, false)"); settle(page, 1500)   # 2 rows × 3 cards on screen, 446 px each: 4 of 6 live
@@ -170,7 +170,7 @@ def test_a_1440_cards_still_lays_out_as_its_live_page(hy):
         page.wait_for_timeout(800)
         card = page.locator(".plg[data-id=m]")
         live = red_left(card.screenshot())
-        page.evaluate("document.querySelector('.plg[data-id=m] iframe.dvp').style.visibility = 'hidden'")
+        page.evaluate("document.querySelector('.plg[data-id=m] iframe.dvpg').style.visibility = 'hidden'")
         page.wait_for_function("() => { const i = document.querySelector('.plg[data-id=m] img.dvi:not(.dvo)'); return /vw=1440&vh=900/.test(i.src) && i.naturalWidth; }",
                                timeout=30000)
         page.wait_for_timeout(400)
