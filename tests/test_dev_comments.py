@@ -33,8 +33,8 @@ def hy(tmp_path, request):
     (lib / "site/index.html").write_text(PAGE); (lib / "site/style.css").write_text(CSS); (lib / "site/mod.js").write_text("export const v = 'yes';")
     (lib / "html/f/index.html").write_text(FRAME)
     (plugins / "dev").symlink_to(HERE)
-    frames = (REPOS / "hyimg-frames" / "manifest.json").is_file()
-    if frames: (plugins / "frames").symlink_to(REPOS / "hyimg-frames")
+    frames = (REPOS / "hyimg-image-studio" / "manifest.json").is_file()
+    if frames: (plugins / "frames").symlink_to(REPOS / "hyimg-image-studio")
     items = {"h1": {"type": "html", "src": "site/index.html", "vw": 1280, "x": 0, "y": 0, "w": 640, "h": 400, "pics": ["site/index.html"]}}
     if frames: items["f1"] = {"type": "htmlframe", "src": "html/f/index.html", "vw": 1280, "x": 700, "y": 0, "w": 640, "h": 400}
     (state / "boards/main.json").write_text(json.dumps({"schema": 1, "revision": 1, "items": items, "groups": {}, "removed": {}}))
@@ -72,15 +72,17 @@ def shot(page, name):
     if SHOTS: os.makedirs(SHOTS, exist_ok=True); page.screenshot(path=os.path.join(SHOTS, name))
 
 
-def board(p, port):
+def board(p, port, draw=True):
+    """draw: Hyimg's drawing tools, put off on 2026-10-09 behind the flag cv.annDraw (hyimg docs/LATER.md); these tests keep them working"""
     br = p.chromium.launch()
     page = br.new_page(viewport={"width": 1600, "height": 960}, color_scheme="dark")
     errors = []; page.on("pageerror", lambda e: errors.append(str(e)))
     page.goto(f"http://127.0.0.1:{port}/canvas.html")
-    page.evaluate("() => { localStorage.setItem('cv.nolib', '1'); localStorage.setItem('cv.lod', '0'); }")
+    page.evaluate("() => { localStorage.setItem('cv.nolib', '1'); localStorage.setItem('cv.lod', '0'); }" if not draw else
+                  "() => { localStorage.setItem('cv.nolib', '1'); localStorage.setItem('cv.lod', '0'); localStorage.setItem('cv.annDraw', '1'); }")
     page.goto(f"http://127.0.0.1:{port}/canvas.html")
     page.wait_for_function("() => typeof PLGST !== 'undefined' && PLGST.some(x => x.name === 'dev' && x.ok) && window.hyAnnot && document.getElementById('bann')"
-                           " && window.hyPeople && hyPeople.me()", timeout=30000)
+                           " && window.hyPeople && hyPeople.me()" + (" && hyAnnot.drawing" if draw else ""), timeout=30000)
     page.evaluate("() => { cam.x = -40; cam.y = -120; cam.z = 1; saveCam(); renderCam(); render(); }")
     return br, page, errors
 

@@ -1,5 +1,5 @@
 """Dev Studio wears its colour (owner 2026-10-09, «конечно» to «3D Studio и Dev Studio пока остаются синими. Дать им их цвета?»), the green
-of the owner's glossary of modes (--dev), as Image Studio wears its purple (hyimg-frames 6e04f1a) and 3D Studio its pink: inside the studio
+of the owner's glossary of modes (--dev), as Image Studio wears its purple (hyimg-image-studio 6e04f1a) and 3D Studio its pink: inside the studio
 the chosen Dev segment of the dock's switch, the picked row of the tree, the chosen weight in the inspector, the tool in hand and the
 primary Done are in the green, Done and the tool with white marks, Reload as it was; the tree's tag, id and class colours stay the code's;
 back on the board the Board segment is the selection's blue again. Chromium, dark, the classic look.

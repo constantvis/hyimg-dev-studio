@@ -15,6 +15,7 @@ const RU = {
   "Select an HTML card or enter one: Dev Studio opens for it": "Выбери HTML-карточку или войди в нее: для нее откроется Dev Studio",
   // Dev Studio
   "Find element": "Найти элемент",
+  "Properties": "Свойства",
   "Elements": "Элементы",
   "Nothing found": "Ничего не найдено",
   "Loading the page…": "Загружаю страницу…",
@@ -23,17 +24,17 @@ const RU = {
   "Only the first {n} elements": "Только первые {n} элементов",
   "Select elements in the page; off, the page takes the clicks · I": "Выбирать элементы на странице; выключено, и клики получает сама страница · I",
   "Select": "Выбрать",
-  // comments and drawings on the page (owner 2026-10-07: «поверх картинки статичной, либо еще как»)
-  "Comment on an element: click it in the page · C": "Комментарий к элементу: кликни по нему на странице · C",
-  "Comment": "Комментарий",
+  // annotations and drawings on the page (owner 2026-10-07: «поверх картинки статичной, либо еще как»; 2026-10-09: comments are Annotations)
+  "Annotation on an element: click it in the page · C": "Аннотация к элементу: кликни по нему на странице · C",
+  "Annotation": "Аннотация",
   "Draw over the page · P": "Рисовать поверх страницы · P",
   "Draw": "Рисовать",
-  "Click an element of the page to comment on it": "Кликни по элементу страницы, чтобы его прокомментировать",
-  // a comment from the element tree (owner 2026-10-08): the row's button, its count, a dot on a folded row
-  "Comment on this element · C": "Комментарий к этому элементу · C",
-  "New comment on this element · C": "Новый комментарий к этому элементу · C",
-  "{n} comments: open": ["{n} комментарий: открыть", "{n} комментария: открыть", "{n} комментариев: открыть"],
-  "Comments inside": "Внутри есть комментарии",
+  "Click an element of the page to annotate it": "Кликни по элементу страницы, чтобы оставить аннотацию",
+  // an annotation from the element tree (owner 2026-10-08): the row's button, its count, a dot on a folded row
+  "Annotation on this element · C": "Аннотация к этому элементу · C",
+  "New annotation on this element · C": "Новая аннотация к этому элементу · C",
+  "{n} annotations: open": ["{n} аннотация: открыть", "{n} аннотации: открыть", "{n} аннотаций: открыть"],
+  "Annotations inside": "Внутри есть аннотации",
   "The page did not say where this element is": "Страница не ответила, где этот элемент",
   "This element is gone from the page": "Этого элемента уже нет на странице",
   "Undo the last edit of the file · ⌘Z": "Отменить последнюю правку файла · ⌘Z",
@@ -98,7 +99,7 @@ const RU = {
 };
 const EN = {
   "{n} elements": ["{n} element", "{n} elements"],
-  "{n} comments: open": ["{n} comment: open", "{n} comments: open"],
+  "{n} annotations: open": ["{n} annotation: open", "{n} annotations: open"],
 };
 
 const pre = d => Object.fromEntries(Object.entries(d).map(([k, v]) => [P + k, v]));

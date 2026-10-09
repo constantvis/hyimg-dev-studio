@@ -38,7 +38,7 @@ test("a board with T gets the words once, every key under the plugin's prefix", 
   const t = L.translator({ t: k => `T(${k})`, strings: d => handed.push(d) });
   assert.equal(handed.length, 1);
   assert.ok(Object.keys(handed[0].ru).every(k => k.startsWith("dev::")));
-  assert.deepEqual(Object.keys(handed[0].en), ["dev::{n} elements", "dev::{n} comments: open"]);
+  assert.deepEqual(Object.keys(handed[0].en), ["dev::{n} elements", "dev::{n} annotations: open"]);
   assert.equal(t("HTML page"), "T(dev::HTML page)");
 });
 

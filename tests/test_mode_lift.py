@@ -33,7 +33,7 @@ def lift(tmp_path):
     (lib / "site/index.html").write_text(PAGE); (lib / "site/style.css").write_text(CSS); (lib / "site/mod.js").write_text("export const v = 'yes';")
     for n, c in enumerate(COLS): (lib / "a" / f"{n}.png").write_bytes(png(c))
     (plugins / "dev").symlink_to(HERE)
-    for n, repo in (("frames", "hyimg-frames"), ("3d", "hyimg-3d-studio")):
+    for n, repo in (("frames", "hyimg-image-studio"), ("3d", "hyimg-3d-studio")):
         if (REPOS / repo / "manifest.json").is_file(): (plugins / n).symlink_to(REPOS / repo)
     # 47 pictures in rows around the three cards a mode opens: an HTML page, a picture, a 3D scene
     items = {}
@@ -130,6 +130,10 @@ def test_dev_opens_interactive_and_i_turns_select_on(lift):
         # I (the page has the focus after that press) turns Select on; now a press picks the button and the page gets nothing
         page.keyboard.press("i"); page.wait_for_function("() => __dev.D.picking")
         assert page.get_attribute(".dvbar [data-tool=pick]", "aria-pressed") == "true"
+        # the camera's flight into Dev mode may still be moving the card: measure once it stands (the same box 100 ms apart), or the
+        # click lands beside the button
+        page.wait_for_function("""() => { const r = document.querySelector('.plg[data-id=h1] iframe.dvf').getBoundingClientRect(), k = [r.x, r.y, r.width].join();
+          const was = window.__box; window.__box = k; return was === k; }""", polling=100, timeout=10000)
         box = page.locator(".plg[data-id=h1] iframe.dvf").bounding_box()
         x, y = frame.evaluate("(() => { const r = document.getElementById('b').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2] })()")
         s = box["width"] / 1280

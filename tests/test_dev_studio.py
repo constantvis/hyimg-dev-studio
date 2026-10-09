@@ -41,7 +41,7 @@ def hy(tmp_path, request):
     (tmp_path / "secret.txt").write_text("outside the library")
     for n, c in enumerate([(200, 80, 80), (80, 160, 90)]): (lib / "a" / f"{n}.png").write_bytes(png(c))
     (plugins / "dev").symlink_to(HERE)
-    for n, repo in (("frames", "hyimg-frames"), ("3d", "hyimg-3d-studio")):
+    for n, repo in (("frames", "hyimg-image-studio"), ("3d", "hyimg-3d-studio")):
         if (REPOS / repo / "manifest.json").is_file(): (plugins / n).symlink_to(REPOS / repo)
     items = {"i0": {"path": "a/0.png", "x": 0, "y": 0, "w": 200, "ar": 2 / 3, "crop": None},
              "i1": {"path": "a/1.png", "x": 240, "y": 0, "w": 200, "ar": 2 / 3, "crop": None},
@@ -169,7 +169,7 @@ def test_mode_switch_follows_selection_and_editors(hy):
         page.wait_for_function("() => !document.body.classList.contains('m3edit')", timeout=10000)
         page.wait_for_function("() => document.querySelector('#modes [data-mode=board]').getAttribute('aria-pressed') === 'true'")
         # Image: the picture becomes a frame of its own under its id, in place, with no step in the board's history until the first Save
-        # (hyimg-frames a9ed877 and 2abd6b8, owner 2026-10-07: the studio on a picture leaves the board as it was unless saved; before, a new
+        # (hyimg-image-studio a9ed877 and 2abd6b8, owner 2026-10-07: the studio on a picture leaves the board as it was unless saved; before, a new
         # frame with a new id replaced it as one undo step); the image studio opens for it; Board leaves it and the picture is back
         pick(page, ["i0"]); past = page.evaluate("past.length"); page.click("#modes [data-mode=image]")
         page.wait_for_function("() => window.__frames && __frames.ED && __frames.ED.win", timeout=30000)

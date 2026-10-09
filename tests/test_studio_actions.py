@@ -1,6 +1,6 @@
 """Dev Studio's session actions top right (owner 2026-10-09 on the dock where Reload, Open and Done stood beside the tools: «кнопки Done у
 нас всегда стандартизированы справа вверху, а не внизу ... Что такое Open? Может быть, Open in browser тогда нужно написать»): Hyimg's one
-element for them (ui/hy/actions.js) in the studio's root. Reload, Open in browser and Done stand in the top row left of the round buttons,
+element for them (ui/hy/actions.js) in the studio's root. Reload, Open in browser and Done stand at the top row's right end (no round buttons in a Studio),
 Done last in the studio's green with white words; the dock keeps the tools, Undo, Redo and the switch only. Without the Mac app «Open in
 browser» opens the page alone, sandboxed, in a new tab; with the app's browsers (a stand-in through hyBrowsers.via) it names the default and
 its menu opens the page in another one; Esc in that menu closes the menu and leaves the studio open, Esc after it leaves. Done leaves and
@@ -32,11 +32,13 @@ def test_dev_studio_actions_top_right(hy):  # noqa: F811
         enter(page)
         # Reload, Open in browser, Done; none of them in the dock any more
         assert page.evaluate(ACTS) == ["reload", "open", "done"]
-        assert page.evaluate(DOCK) == ["pick", "comment", "draw", "undo", "redo"], page.evaluate(DOCK)
+        assert page.evaluate(DOCK) == ["pick", "comment", "undo", "redo"], page.evaluate(DOCK)   # no Draw (hyimg docs/LATER.md)
         assert page.evaluate("() => !!document.querySelector('#dock #modes')")
-        # the top row's line and height, the row's gap left of the bell
-        acts, bell = page.evaluate(BOX, ".dvui hy-studio-actions"), page.evaluate(BOX, "#bntf")
-        assert acts[1] == bell[1] == 12 and acts[3] == 38 and acts[2] == bell[0] - 8, (acts, bell)
+        # the top row's line and height, at its gutter: in a Studio the board's round buttons are away (owner 2026-10-09 on round 14's
+        # 3D Studio: «В режиме студии мы вот эти все элементы убираем»)
+        acts, width = page.evaluate(BOX, ".dvui hy-studio-actions"), page.evaluate("() => innerWidth")
+        assert acts[1] == 12 and acts[3] == 38 and acts[2] == width - 12, (acts, width)
+        assert page.evaluate("() => ['#bntf', '#bkeys', '#bhist', '#bset'].every(q => !document.querySelector(q).getClientRects().length)")
         # Done: the studio's green, white words, the key in its tooltip; Reload on the row's glass
         green = page.evaluate(PROBE, "#2fae6a")
         done = page.evaluate("() => { const b = document.querySelector('.dvui hy-studio-actions [data-a=done]'), c = getComputedStyle(b); return [c.backgroundColor, c.color, b.title]; }")

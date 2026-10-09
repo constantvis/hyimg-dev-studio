@@ -85,7 +85,7 @@ const toPage = m => { if (D && D.frame && D.frame.contentWindow) D.frame.content
 const accent = () => toPage({ a: "accent", c: getComputedStyle(document.documentElement).getPropertyValue("--dev").trim() });
 new MutationObserver(() => { if (D) accent(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 
-const KEYHINT = [{ id: "pick", keys: ["i"], t: "Select an element" }, { id: "comment", keys: ["c"], t: "Comment" }, { id: "back", keys: ["escape"], t: "Back" }];
+const KEYHINT = [{ id: "pick", keys: ["i"], t: "Select an element" }, { id: "comment", keys: ["c"], t: "Annotation" }, { id: "back", keys: ["escape"], t: "Back" }];
 async function openDev(id) {
   if (D) closeDev();
   const it = HY.board.items[id], el = cardEl(id); if (!isPage(it) || !el) return;
@@ -140,7 +140,7 @@ function drawZoom(own) { const h = D && D.bar.querySelector(".dvzh"); if (h) h.c
 function setCommenting(on) {
   if (!D) return; if (on && !D.commenting) D.pickWas = D.picking;   // Esc gives back the tool before it
   D.commenting = !!on; if (on) D.picking = false; setPicking(D.picking);
-  if (on) HY.toast(t("Click an element of the page to comment on it"), "info");
+  if (on) HY.toast(t("Click an element of the page to annotate it"), "info");
 }
 function comment(d) {
   const it = HY.board.items[D.id], el = cardEl(D.id), C = window.hyComments; if (!it || !el || !C || !C.newAt || !d.el) return;
@@ -225,7 +225,7 @@ addEventListener("message", e => {
   if (d.key === "Enter" && D.detail) typeText(D.detail);
   if (d.key === "i") setPicking(!D.picking);
   if (d.key === "c") setCommenting(!D.commenting);
-  if (d.key === "p" && window.hyAnnot) hyAnnot.tool("pen");
+  if (d.key === "p" && window.hyAnnot && hyAnnot.drawing) hyAnnot.tool("pen");   // the drawing tools wait for later (hyimg docs/LATER.md)
 });
 
 /* the panels: the 3D studio's places (under the top band, right of the library, clear of the dock) and the library's rows */
@@ -234,7 +234,8 @@ function buildUI() {
   root.innerHTML = `
     <div class="dvp dvl hy-blk" data-hyui><div class="lhd"><label class="hy-search">${svg(IC.find, 15)}<input data-q type="search" placeholder="${esc(t("Find element"))}" aria-label="${esc(t("Find element"))}" autocomplete="off" spellcheck="false"></label></div>
       <div class="dvh hy-sh"><span>${esc(t("Elements"))}</span><span class="cnt hy-sh-n"></span></div><div class="dvt" role="tree" tabindex="0" aria-label="${esc(t("Elements"))}"></div></div>
-    <div class="dvp dvr hy-blk" data-hyui><div class="ih"></div><div class="inf"></div></div>`;
+    <div class="dvp dvr hy-blk" data-hyui><div class="hy-bh"><span class="hy-bh-tab hy-bh-title on">${svg("properties", 14)}${esc(t("Properties"))}</span></div>
+      <div class="ih"></div><div class="inf"></div></div>`;
   document.body.appendChild(root);
   const q = s => root.querySelector(s);
   const ui = { root, left: q(".dvl"), right: q(".dvr"), tree: q(".dvt") };
@@ -285,14 +286,15 @@ function buildUI() {
     m.style.left = Math.min(e.clientX, innerWidth - m.offsetWidth - 8) + "px"; m.style.top = Math.min(e.clientY, innerHeight - m.offsetHeight - 8) + "px";
   });
   tree.addEventListener("dblclick", e => { const r = e.target.closest(".row"); if (!r || e.target.closest(".chev, .dvcb, .dvcn")) return; const i = +r.dataset.i; D.open.has(i) ? D.open.delete(i) : D.open.add(i); drawTree(); });
-  // the dock: Select, Comment, Draw, Undo, Redo (the board's own dock, in its look); Live view, Reload, Open in <Browser> and Done stand
+  // the dock: Select, Annotation (Draw only with the drawing tools on, hyimg docs/LATER.md), Undo, Redo (the board's own dock, in its look); Live view, Reload, Open in <Browser> and Done stand
   // top right, Hyimg's one place for a Studio's session actions (ui/hy/actions.js; owner 2026-10-09: «кнопки Done у нас всегда
   // стандартизированы справа вверху, а не внизу»)
   const bar = document.createElement("span"); bar.className = "dvbar";
   bar.innerHTML = `<button data-tool="pick" aria-pressed="false" title="${esc(t("Select elements in the page; off, the page takes the clicks · I"))}" aria-label="${esc(t("Select"))}">${svg(IC.pick, 17)}<kbd>I</kbd></button>`
-    + `<button data-tool="comment" aria-pressed="false" title="${esc(t("Comment on an element: click it in the page · C"))}" aria-label="${esc(t("Comment"))}">`
+    + `<button data-tool="comment" aria-pressed="false" title="${esc(t("Annotation on an element: click it in the page · C"))}" aria-label="${esc(t("Annotation"))}">`
     + `${svg("comment", 17)}<kbd>C</kbd></button>`
-    + (window.hyAnnot ? `<button data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
+    + (window.hyAnnot && hyAnnot.drawing ? `<button data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
+    + `<span class="sep" aria-hidden="true"></span>`
     + `<button data-a="undo" disabled title="${esc(t("Undo the last edit of the file · ⌘Z"))}" aria-label="${esc(t("Undo"))}">${svg("undo", 17)}</button>`
     + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button>`
     + `<span class="dvzh" role="status">${esc(t("The page has the zoom · Esc to give it back"))}</span>`;
@@ -300,7 +302,7 @@ function buildUI() {
     const b = e.target.closest("button"); if (!b || !D) return;
     if (b.dataset.tool === "pick") return setPicking(!D.picking);
     if (b.dataset.tool === "comment") return setCommenting(!D.commenting);
-    if (b.dataset.a === "draw" && window.hyAnnot) return hyAnnot.tool("pen");
+    if (b.dataset.a === "draw" && window.hyAnnot && hyAnnot.drawing) return hyAnnot.tool("pen");
     if (b.dataset.a === "undo") EDITS.undo();
     if (b.dataset.a === "redo") EDITS.redo();
   });
@@ -438,7 +440,7 @@ export function register(hy) {
        toward its own edge */
     /* Dev Studio wears its colour, its green (--dev, the owner's glossary of modes, Concepts/html/editors-concepts/_shared/gloss.css), in
        both looks (owner 2026-10-09, «конечно» to «3D Studio и Dev Studio пока остаются синими. Дать им их цвета?»; as Image Studio's purple,
-       hyimg-frames 6e04f1a, and 3D Studio's pink): every chosen, checked or primary thing of the studio (the picked row, a chosen option, a
+       hyimg-image-studio 6e04f1a, and 3D Studio's pink): every chosen, checked or primary thing of the studio (the picked row, a chosen option, a
        value's fill, the tool in hand and Done in the dock) and the Dev segment of the dock's switch (HY.mode color). On the board's root
        because the dock reads it; the light value is the same hue darker, 3.2:1 on the light paper and 4:1 under white words. Blue stays the
        board's selection; the tree's tag, attribute and class colours are the code's own */
@@ -449,11 +451,18 @@ export function register(hy) {
       --hy-val-on: color-mix(in srgb, var(--dev) 30%, var(--hy-well)); --hy-val-ink: color-mix(in srgb, var(--dev) 14%, var(--ink)); }
     .dvr hy-segmented[variant=well].seg > .st, .dvr hy-segmented[variant=well]:not(.has-st) > button.on { background: var(--hy-val-on); box-shadow: none; }
     .dvr hy-segmented[variant=well] > button.on { color: var(--hy-val-ink); }
-    #dock .plgdock.dvbar button:is(.on, .pri) { background: var(--dev) !important; color: var(--hy-on-accent, #fff) !important; }   /* over canvas.html's ink */
+    /* the dock's buttons are Image Studio's tools in the dock (hyimg-image-studio studiodock.js, round 11 D3): 36 × 34, round, no ground until
+       pointed at, never squeezed by a narrow dock; one size for Select, Comment, Draw, Undo and Redo (owner 2026-10-09, an arrow at the
+       dock: «размеры элементов внизу не соответствуют»: Select and Comment were 34 px circles, Draw, Undo and Redo 45 px pills). The width
+       !important and :not(#_): the 3D studio's own rule for its dock's tools, 34 px !important, is not scoped to its dock and reached here */
+    #dock .plgdock.dvbar:not(#_) button { width: 36px !important; padding: 0 !important; justify-content: center; background: transparent !important; flex: none; }
+    #dock .plgdock.dvbar:not(#_) button:hover:not(.on, .pri, :disabled) { background: var(--raise) !important; }
+    #dock .plgdock.dvbar:not(#_) button:is(.on, .pri) { background: var(--dev) !important; color: var(--hy-on-accent, #fff) !important; }   /* over canvas.html's ink */
     .dvui { --dv-r: var(--hy-trow-r, 8px); color: var(--ink); font: 400 13px/1.4 var(--sans, system-ui); }
     .dvp { position: fixed; z-index: 60; box-shadow: var(--plate-sh, 0 16px 50px rgba(0,0,0,.35)); }
     .dvl { --hx: -16px; left: var(--l); top: var(--t); bottom: var(--b); width: 260px; display: flex; flex-direction: column; padding: 8px 8px 6px; overflow: hidden; }
-    .dvr { --hx: 18px; right: var(--r); top: var(--t); bottom: var(--b); width: 290px; overflow: auto; overscroll-behavior: contain; }
+    .dvr { --hx: 18px; right: var(--r); top: var(--t); bottom: var(--b); width: 290px; overflow: auto; overscroll-behavior: contain; display: flex; flex-direction: column; }
+    .dvr > .ih, .dvr > .inf { flex: none; }   /* under the block's header (.hy-bh, its one title as the chosen tab), as 3D Studio's Properties */
     .dvl, .dvr { transition: left var(--inset-ms, 0ms) cubic-bezier(.32,.72,0,1), right var(--inset-ms, 0ms) cubic-bezier(.32,.72,0,1); }
     .dvl .lhd { display: flex; flex: none; padding-bottom: 6px; } .dvl .lhd .hy-search > input { color: var(--ink); }
     .dvl .dvh { cursor: default; }   /* the tree's title: a section's head of the app (.hy-sh), its count at the right end */
@@ -474,7 +483,7 @@ export function register(hy) {
     .dvt .row .dvcn, .dvt .row .dvcb, .dvt .row .dvcd { margin-left: auto; } .dvt .row .dvcb + .dvcn { margin-left: 0; } .dvt .row .dvcn { color: var(--sel); } .dvt .row .dvcd { margin-right: 6px; }
     .dvt .dtg { color: var(--ink); } .dvt .dia { color: #e8a24a; } .dvt .dic { color: #7dbbf5; } .dvt .dtx { color: var(--muted); margin-left: 8px; font-family: var(--sans, system-ui); }
     :root[data-theme=light] .dvt .dia { color: #b06a10; } :root[data-theme=light] .dvt .dic { color: #1f6fc0; }
-    .dvr .ih { display: flex; align-items: center; gap: 8px; min-height: var(--hy-trow-h, 28px); padding: 10px 14px 6px; position: sticky; top: 0; background: var(--hy-blk); z-index: 2; }
+    .dvr .ih { display: flex; align-items: center; gap: 8px; min-height: var(--hy-trow-h, 28px); padding: 4px 14px 8px; position: sticky; top: 0; background: var(--hy-blk); z-index: 2; }
     .dvr .ih .dic { color: var(--sub); flex: none; } .dvr .ih div { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
     .dvr .ih b { font: 600 13px ui-monospace, "SF Mono", Menlo, monospace; color: var(--ink); flex: none; } .dvr .ih span { color: var(--muted); font: 12px ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .dvr .inf { padding: 4px 8px 16px; }

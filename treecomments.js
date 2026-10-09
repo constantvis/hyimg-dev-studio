@@ -41,8 +41,8 @@ export function makeTreeComments({ D, HY, t, esc, toPage, select, comment, drawT
   // a row's mark, drawn with it: its threads' count, a click opens them; a folded row with threads further in, a dot
   function mark(key, folded) {
     const l = MAP.get(key);
-    if (l) return `<hy-button class="dvcn" size="s" variant="ghost" icon="comment" data-cm-keep title="${esc(t("{n} comments: open", { n: l.length }))}">${l.length}</hy-button>`;
-    if (folded && MAP.size) for (const k of MAP.keys()) if (k.startsWith(key + ">")) return `<hy-badge class="dvcd" dot title="${esc(t("Comments inside"))}"></hy-badge>`;
+    if (l) return `<hy-button class="dvcn" size="s" variant="ghost" icon="comment" data-cm-keep title="${esc(t("{n} annotations: open", { n: l.length }))}">${l.length}</hy-button>`;
+    if (folded && MAP.size) for (const k of MAP.keys()) if (k.startsWith(key + ">")) return `<hy-badge class="dvcd" dot title="${esc(t("Annotations inside"))}"></hy-badge>`;
     return "";
   }
   // the comment button: one for the tree, it stands on the row under the pointer, else on the selected one; on a row with threads it is a
@@ -53,7 +53,7 @@ export function makeTreeComments({ D, HY, t, esc, toPage, select, comment, drawT
     const box = d.ui.tree, r = row || box.querySelector(".row.hov") || (d.sel ? box.querySelector(`.row[data-i="${d.sel}"]`) : null);
     if (!r) { d.cmb.remove(); return; }
     const n = r.querySelector(".dvcn"), set = (k, v) => { if (d.cmb.getAttribute(k) !== v) d.cmb.setAttribute(k, v); };
-    set("icon", n ? "plus" : "comment"); set("label", n ? t("New comment on this element · C") : t("Comment on this element · C"));
+    set("icon", n ? "plus" : "comment"); set("label", n ? t("New annotation on this element · C") : t("Annotation on this element · C"));
     if (d.cmb.parentNode !== r || d.cmb.nextSibling !== n) r.insertBefore(d.cmb, n);
   }
   // the row under the pointer (null: none): its pins lit on the board, the button on it
@@ -101,6 +101,6 @@ export function makeTreeComments({ D, HY, t, esc, toPage, select, comment, drawT
   }
   // threads added, answered, resolved or gone: the rows' marks again when they changed
   function refresh() { const d = D(); if (!d || !d.tree) return; const was = sig; count(); if (sig !== was) drawTree(); }
-  const item = () => window.hyMenuItem ? hyMenuItem('data-act="comment"', "comment", esc(t("Comment")), ["C"]) : "";
+  const item = () => window.hyMenuItem ? hyMenuItem('data-act="comment"', "comment", esc(t("Annotation")), ["C"]) : "";
   return { count, mark, place, hover, start, spot, click, opened, refresh, item };
 }
