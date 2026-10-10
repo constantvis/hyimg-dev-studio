@@ -201,65 +201,79 @@ def click_mid(page, sel):   # the middle of the page on screen: zoomed in, its c
     b = page.locator(sel).bounding_box(); page.mouse.click(b["x"] + b["width"] / 2, b["y"] + b["height"] / 2)
 
 
+def pinch(page, sel, scale=1.6):
+    """A real trackpad pinch (Chromium's synthetic one): the page under it gets ⌃ with the wheel first, and if nobody calls
+    preventDefault, Chromium zooms the whole window, the board with its menus and panels (owner 2026-10-10, the video of Dev Studio).
+    Only a pinch in shows it: the window never zooms out below 1. The board is taken back from its 8× cap first, so it can zoom in too;
+    the pinch goes where the page itself is on top (not a panel over it), nearest the middle of the window."""
+    page.evaluate("HY.camera(HY.cam.x, HY.cam.y, Math.min(HY.cam.z, 2), false)"); page.wait_for_timeout(300)
+    pt = page.evaluate("""sel => { const f = document.querySelector(sel), W = innerWidth, H = innerHeight; let best = null;
+      for (let y = 20; y < H; y += 20) for (let x = 20; x < W; x += 20) { if (document.elementFromPoint(x, y) !== f) continue;
+        const d = Math.hypot(x - W / 2, y - H / 2); if (!best || d < best.d) best = { x, y, d }; }
+      return best; }""", sel)
+    assert pt, "the page is nowhere on top"
+    s = page.context.new_cdp_session(page)
+    s.send("Input.synthesizePinchGesture", {"x": pt["x"], "y": pt["y"], "scaleFactor": scale, "gestureSourceType": "mouse"})
+    page.wait_for_timeout(400); s.detach()
+
+
 def test_zoom_over_a_live_page(lift):
-    """A pinch (⌃ with the wheel) over the live page zooms the board, not the page; a click in the page gives it the zoom, Esc or a
-    click outside gives it back; ⌥ sends one gesture to the page at once; a plain wheel scrolls the page. Dev mode and the HTML frame."""
+    """A pinch (⌃ with the wheel) over the live page zooms the board, not the page, and never the window, a click in the page or not
+    (owner 2026-10-10: «приближается вообще вся наша картинка, и менюшки уходят за границы»; the state «The page has the zoom» a click
+    gave is gone: «постоянно вот эта вот проблема возникает и препятствует»). ⌥ sends one gesture to the page, and to the board if the page
+    does not take it; a plain wheel scrolls the page. Dev mode and the HTML frame."""
     port, lib, state = lift
     with sync_playwright() as p:
         br, page, errors = board(p, port)
         z = lambda: page.evaluate("HY.cam.z")
+        vv = lambda: page.evaluate("visualViewport.scale")
+        own = lambda id: page.evaluate(f"document.querySelector('.plg[data-id={id}]').classList.contains('hy-page-own')")
         page.dblclick(".plg[data-id=h1]"); page.wait_for_function("() => __dev.D && __dev.D.tree", timeout=20000)
         page.wait_for_timeout(2300)   # Dev mode fits the card again for 2 s after it opens (the library folding away)
         frame = next(f for f in page.frames if "/sandbox/" in f.url)
+        # the page counts the pinches it sees and takes them (preventDefault) only while __take is on: most pages have no zoom of their own
         frame.evaluate("""(() => { const d = document.createElement('div'); d.style.height = '3000px'; document.body.appendChild(d);
-          window.__n = 0; addEventListener('wheel', e => { if (e.ctrlKey) { __n++; e.preventDefault(); } }, { passive: false }); })()""")
-        box = page.locator(".plg[data-id=h1] iframe.dvf").bounding_box()
+          window.__n = 0; window.__take = false; addEventListener('wheel', e => { if (e.ctrlKey) { __n++; if (__take) e.preventDefault(); } }, { passive: false }); })()""")
+        dvf = ".plg[data-id=h1] iframe.dvf"
+        box = page.locator(dvf).bounding_box()
         # the board's: the camera zooms at the pointer, the page never sees the gesture and keeps its scale
         z0 = z(); wheel_at(page, box, -120, ["Control"])
         assert z() > z0 * 1.05 and frame.evaluate("__n") == 0 and frame.evaluate("visualViewport.scale") == 1
         # a plain wheel scrolls the page, the board stays
-        box = page.locator(".plg[data-id=h1] iframe.dvf").bounding_box(); z1 = z()
+        box = page.locator(dvf).bounding_box(); z1 = z()
         wheel_at(page, box, 300); frame.wait_for_function("() => scrollY > 0")
         assert abs(z() - z1) < 1e-6
-        # ⌥ with the pinch: that one to the page, without entering
-        wheel_at(page, box, -120, ["Alt", "Control"])
-        assert abs(z() - z1) < 1e-6 and frame.evaluate("__n") == 1 and not page.evaluate("document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
-        # a click in the page gives it the zoom: only the words in the dock say so, nothing is drawn round the card; its pinch is its own now
-        assert not page.evaluate("!!document.querySelector('.dvbar .dvzh.on')") and page.evaluate(RINGS, "h1") == []
-        click_mid(page, ".plg[data-id=h1] iframe.dvf"); page.wait_for_function("() => document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
-        page.wait_for_function("() => document.querySelector('.dvbar .dvzh.on')")
-        assert page.inner_text(".dvbar .dvzh") == "The page has the zoom · Esc to give it back"
-        page.wait_for_timeout(400)
-        assert page.evaluate(RINGS, "h1") == []
-        shot(page, "lift-dev-page-has-zoom-dark.png")
-        wheel_at(page, box, -120, ["Control"])
-        assert abs(z() - z1) < 1e-6 and frame.evaluate("__n") == 2
-        # Esc gives it back (the first Esc; Dev mode stays open)
-        page.keyboard.press("Escape"); page.wait_for_function("() => !document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
-        assert page.evaluate("!!__dev.D")
-        wheel_at(page, box, -60, ["Control"]); assert z() != z1 and frame.evaluate("__n") == 2
-        # entered again, a click outside the card gives it back too
-        click_mid(page, ".plg[data-id=h1] iframe.dvf"); page.wait_for_function("() => document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
-        page.click(".dvl .dvh"); page.wait_for_function("() => !document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
-        # with Select on a click picks, it does not give the page the zoom
-        page.keyboard.press("i"); page.wait_for_function("() => __dev.D.picking")
-        box = page.locator(".plg[data-id=h1] iframe.dvf").bounding_box()
-        page.mouse.click(box["x"] + 40, box["y"] + 40); page.wait_for_timeout(300)
-        assert not page.evaluate("document.querySelector('.plg[data-id=h1]').classList.contains('hy-page-own')")
+        # ⌥ with the pinch: that one to the page; a page that takes it keeps it, the board stays
+        frame.evaluate("__take = true"); wheel_at(page, box, -120, ["Alt", "Control"])
+        assert abs(z() - z1) < 1e-6 and frame.evaluate("__n") == 1
+        # a page that does not take it: the board zooms, never the window
+        frame.evaluate("__take = false"); wheel_at(page, box, -120, ["Alt", "Control"])
+        assert frame.evaluate("__n") == 2 and z() > z1 * 1.05 and vv() == 1
+        # a click in the page gives it nothing: no words in the dock, nothing round the card, the pinch is still the board's
+        click_mid(page, dvf); page.wait_for_timeout(400)
+        assert not own("h1") and not page.evaluate("!!document.querySelector('.dvbar .dvzh')") and page.evaluate(RINGS, "h1") == []
+        shot(page, "lift-dev-click-in-page-dark.png")
+        z2 = min(z(), 2); pinch(page, dvf)
+        assert vv() == 1, "a pinch after a click in the page zoomed the whole window"
+        assert z() > z2 * 1.05 and frame.evaluate("__n") == 2
         page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D"); page.wait_for_timeout(600)
         # the HTML frame's live view (the frames plugin, a page of the library's origin): the same rule from the host
         page.evaluate("HY.camera(300, 300, 1, false)"); page.wait_for_timeout(300)
         page.evaluate("PLG.htmlframe.dblclick('f1')"); page.wait_for_selector(".plg[data-id=f1] iframe.hfl")
         hf = page.frame_locator(".plg[data-id=f1] iframe.hfl"); hf.locator("h1").wait_for()
-        box = page.locator(".plg[data-id=f1] iframe.hfl").bounding_box()
-        z2 = z(); wheel_at(page, box, -120, ["Control"]); assert z() > z2 * 1.05
-        box = page.locator(".plg[data-id=f1] iframe.hfl").bounding_box()
+        hfl = ".plg[data-id=f1] iframe.hfl"
+        box = page.locator(hfl).bounding_box()
+        z3 = z(); wheel_at(page, box, -120, ["Control"]); assert z() > z3 * 1.05
         # the live view is no mode: the board's selection stays (its corners), but nothing of the live view's own is drawn round the card
         # (3D's global .plg-live outline drew there)
         assert page.evaluate(f"({RINGS})('f1', true)") == [], "the live view draws no frame round the card"
-        click_mid(page, ".plg[data-id=f1] iframe.hfl"); page.wait_for_function("() => document.querySelector('.plg[data-id=f1]').classList.contains('hy-page-own')")
-        page.wait_for_timeout(400); assert page.evaluate(f"({RINGS})('f1', true)") == []
-        z3 = z(); wheel_at(page, box, -120, ["Control"]); assert abs(z() - z3) < 1e-6
+        click_mid(page, hfl); page.wait_for_timeout(400)
+        assert not own("f1") and page.evaluate(f"({RINGS})('f1', true)") == []
+        z4 = min(z(), 2); pinch(page, hfl)
+        assert vv() == 1, "a pinch after a click in the HTML frame zoomed the whole window"
+        assert z() > z4 * 1.05
+        box = page.locator(hfl).bounding_box(); z5 = z(); wheel_at(page, box, -120, ["Alt", "Control"])
+        assert z() > z5 * 1.05 and vv() == 1, "⌥ with a pinch the frame's page does not take goes to the board"
         assert not errors, errors
         br.close()
 

@@ -20,11 +20,11 @@ On the left is the tree of the page's elements, with the library's «Find folder
 
 Dev Studio opens with the page live: its buttons, links and fields work as in a browser, and **Select** in the dock is off. It opens that way every time, nothing is remembered per card. Press I or click Select to turn it on. Then a click in the page selects the element under the pointer, ⇧-click adds one or takes it away, hovering outlines what a click would take, and a double click types a text in place. The page doesn't get those clicks. Press I again to give them back. I works while the page has the focus too, unless you're typing in one of its fields.
 
-A pinch, or ⌃ or ⌘ with the wheel, over the page zooms the board at the pointer, as over a picture. The page itself doesn't scale. A plain two-finger scroll still scrolls the page. If the page has a zoom of its own (a map, a canvas app), click into it: the zoom goes to the page and the dock says «The page has the zoom · Esc to give it back». Nothing is drawn round the card. Esc, a click outside the card or leaving the studio gives the zoom back to the board. Hold ⌥ while pinching to send that one gesture to the page without clicking. The frames plugin's HTML live view works the same way, since Hyimg does this part (`review/ui/framezoom.js`).
+A pinch, or ⌃ or ⌘ with the wheel, over the page zooms the board at the pointer, as over a picture. The page itself doesn't scale. A plain two-finger scroll still scrolls the page. A click in the page doesn't change that. If the page has a zoom of its own (a map, a canvas app), hold ⌥ while pinching: that gesture goes to the page, and if the page doesn't use it, the board zooms. A pinch never zooms the app window itself. The frames plugin's HTML live view works the same way, since Hyimg does this part (`review/ui/framezoom.js`).
 
 While the studio is open the board's selection outline is gone, so you see the card's edges. The card is lifted instead: a soft shadow under it and the rest of the board slightly darker. Hyimg does this for every studio (`review/ui/editlift.js`).
 
-The tree follows the page: if a script adds rows, the tree shows them within a second. Esc steps out: first the page's zoom if it has it, then the selection, then Dev Studio. **Done** in the dock or **Board** in the switch closes it and puts the camera back. ⌘. hides the panels together with the rest of the interface.
+The tree follows the page: if a script adds rows, the tree shows them within a second. Esc steps out: first the selection, then Dev Studio. **Done** in the dock or **Board** in the switch closes it and puts the camera back. ⌘. hides the panels together with the rest of the interface.
 
 ## Editing
 

@@ -54,8 +54,7 @@ const RU = {
   "Viewport": "Вьюпорт",
   "<b>Click</b> an element in the page or the tree to edit it, <b>⇧</b> adds one": "<b>Клик</b> по элементу на странице или в дереве, чтобы его править, <b>⇧</b> добавляет еще один",
   "The page takes the clicks: <b>I</b> turns on Select to pick its elements, or pick one in the tree": "Клики получает страница: <b>I</b> включает «Выбрать», чтобы выбирать ее элементы, или выбери элемент в дереве",
-  "Pinch zooms the board, after a click in the page the page; <b>Esc</b> undoes the click, <b>⌥</b> skips it": "Щипок приближает доску, а после клика по странице саму страницу. <b>Esc</b> отменяет клик, <b>⌥</b> обходится без него",
-  "The page has the zoom · Esc to give it back": "Зум у страницы · Esc вернет его доске",
+  "Pinch zooms the board, with <b>⌥</b> the page": "Щипок приближает доску, а с <b>⌥</b> саму страницу",
   // editing (0.2): the inspector's controls, typing in place, the reasons a thing can't be saved
   "Layout": "Раскладка",
   "Appearance": "Вид",

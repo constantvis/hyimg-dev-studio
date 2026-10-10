@@ -78,8 +78,8 @@ async function openDev(id) {
   el.classList.add("plg-live", "dvlive"); document.body.classList.add("dvedit");
   const f = document.createElement("iframe"); f.className = "dvf"; f.setAttribute("sandbox", "allow-scripts"); f.title = it.src;
   f.src = b + pathUrl(it.src) + "?hyp=" + enc(PLUGIN); sizeTo(f, it); el.appendChild(f); D.frame = f;
-  // a pinch over the page zooms the board until a click gives the page the zoom (Hyimg ui/framezoom.js; agent.js sends the gestures)
-  D.zoom = window.hyFrameZoom ? hyFrameZoom.attach(f, { card: el, changed: own => { toPage({ a: "zoom", on: own }); drawZoom(own); } }) : null;
+  // a pinch over the page zooms the board, ⌥ with it the page (Hyimg ui/framezoom.js; agent.js sends the gestures)
+  D.zoom = window.hyFrameZoom ? hyFrameZoom.attach(f) : null;
   D.wait = setTimeout(() => { if (D && !D.tree) { D.info.none = true; drawTree(); } }, 6000);
   D.ui = buildUI(); HY.dock(D.bar); drawBar(); PN.sync();
   D.ui.right.addEventListener("focusout", () => setTimeout(() => { if (D && D.dirty) drawInspector(); }, 0));
@@ -116,7 +116,6 @@ function setPicking(on) {
   if (!D) return; const was = D.picking; D.picking = !!on; if (on) D.commenting = false; toPage({ a: "inspect", on: D.picking || D.commenting });
   D.bar.querySelectorAll("[data-tool]").forEach(b => { const v = !!(b.dataset.tool === "pick" ? D.picking : D.commenting); b.classList.toggle("on", v); b.setAttribute("aria-pressed", String(v)); });
   if (was !== D.picking && !D.detail) drawInspector();   // its footnote says what a click in the page does now
-  if (D.picking && D.zoom) D.zoom.release();
 }
 // Edit mode (treeedit.js): the mini toggle in the right block's header or E; Select comes on with it (a click picks, a double click types),
 // and goes back to how it was when Edit mode ends
@@ -126,8 +125,6 @@ function setEdit(on) {
   if (D.edit) { D.pickBefore = D.picking; if (!D.picking) setPicking(true); } else if (D.pickBefore === false && D.picking) setPicking(false);
   PN.sync(); drawTree(); drawInspector();
 }
-// the dock says when the page has the zoom (owner 2026-10-08): «The page has the zoom · Esc to give it back»
-function drawZoom(own) { const h = D && D.bar.querySelector(".dvzh"); if (h) h.classList.toggle("on", !!own); }
 // Comments on the page's elements (owner 2026-10-07: «чтобы я мог добавлять либо поверх картинки статичной, либо еще как»): the Comment tool
 // (C) makes a click in the page pin a thread to the element under it (Hyimg's ui/comments.js): its key in the tree, a css selector, its tag
 // and text, the point in the page; the pin follows the element in the live page (the page reports where its elements are) and stands at
@@ -202,14 +199,12 @@ addEventListener("message", e => {
       if (r) { D.open.add(r.i); (r.k || []).forEach(k => { if (k.t === "body") { D.open.add(k.i); } }); }
       // a page (again): the select tool, the source, the pins, the marks' colour, Edit mode
       setPicking(D.picking); EDITS.load(); D.watching = null; watchPins(); accent(); toPage({ a: "edit", on: !!D.edit });
-      if (D.zoom) D.zoom.release();   // and the zoom the board's
     }
     drawTree(); if (!D.detail) drawInspector();
   }
   if ("hover" in d) { D.ui.tree.querySelectorAll(".row.hov").forEach(r => r.classList.remove("hov")); if (d.hover) { const r = D.ui.tree.querySelector(`.row[data-i="${d.hover}"]`); if (r) r.classList.add("hov"); } }
   if (d.where) { for (const [k, r] of Object.entries(d.where)) WHERE.set(k, r); if (window.hyComments) hyComments.draw(); }
   if (d.zoom && typeof d.zoom === "object" && D.zoom) D.zoom.wheel(d.zoom);   // checked there: numbers in range only
-  if (d.press === 1 && !D.picking && !D.commenting && D.zoom) D.zoom.enter();
   if (d.spot) { TC.spot(d.spot); return; }   // where a comment from the tree goes (treecomments.js)
   if (d.pick && D.commenting) { comment(d); return; }
   if (d.pick) { (d.path || []).slice(0, -1).forEach(i => D.open.add(i)); select(d.pick, false, d.shift); }
@@ -300,8 +295,7 @@ function buildUI() {
     + (window.hyAnnot && hyAnnot.drawing ? `<button data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
     + `<span class="sep" aria-hidden="true"></span>`
     + `<button data-a="undo" disabled title="${esc(t("Undo the last edit of the file · ⌘Z"))}" aria-label="${esc(t("Undo"))}">${svg("undo", 17)}</button>`
-    + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button>`
-    + `<span class="dvzh" role="status">${esc(t("The page has the zoom · Esc to give it back"))}</span>`;
+    + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button>`;
   bar.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || !D) return;
     if (b.dataset.tool === "pick") return setPicking(!D.picking);
@@ -400,7 +394,7 @@ function drawInspector() {
       + `<p class="hy-hint dhint">${D.srcErr ? t("<b>Can't save</b> this file: {why}", { why: esc(D.srcErr) })
         : D.picking ? t("<b>Click</b> an element in the page or the tree to edit it, <b>⇧</b> adds one")
         : t("The page takes the clicks: <b>I</b> turns on Select to pick its elements, or pick one in the tree")}</p>`   /* the app's footnote (ui/look.css .hy-hint) */
-      + (D.picking ? "" : `<p class="hy-hint dhint">${t("Pinch zooms the board, after a click in the page the page; <b>Esc</b> undoes the click, <b>⌥</b> skips it")}</p>`);
+      + (D.picking ? "" : `<p class="hy-hint dhint">${t("Pinch zooms the board, with <b>⌥</b> the page")}</p>`);
     return;
   }
   const n = 1 + D.more.length;
@@ -426,10 +420,10 @@ function onKey(e) {
     if (e.key === "Enter" && !e.altKey && !e.shiftKey) { e.preventDefault(); closeDev(); return true; }   // ⌘↵ Done, the primary (P4 S-28)
     return false;
   }
-  if (e.key === "Escape") {   // Esc steps out: an open comment thread, the comment tool, the page's zoom, the selection, then Dev mode
+  if (e.key === "Escape") {   // Esc steps out: an open comment thread, the comment tool, the selection, then Dev mode
     if (e.preventDefault) e.preventDefault();
     if (window.hyComments && hyComments.escape && hyComments.escape()) return true;   // a thread opened from a pin or a row's count
-    if (D.commenting) { D.commenting = false; setPicking(!!D.pickWas); } else if (D.zoom && D.zoom.owns) D.zoom.release(); else if (D.sels.size) unselect(); else closeDev();
+    if (D.commenting) { D.commenting = false; setPicking(!!D.pickWas); } else if (D.sels.size) unselect(); else closeDev();
     return true;
   }
   if (e.key === "Enter" && D.detail) { e.preventDefault(); typeText(D.detail); return true; }
@@ -523,10 +517,6 @@ export function register(hy) {
     .dvr .dsw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 25%, transparent); }
     .dvr .dnote { color: var(--muted); font-size: 12px; margin: 8px 6px; line-height: 1.45; } .dvr .dhint { margin: 10px 6px; }
     #dock .dvbar { display: contents; }
-    /* «the page has the zoom»: the words open in the dock while it lasts, the one sign of it (nothing on the card) */
-    #dock .dvzh { max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; flex: none; font: 500 12px var(--sans, system-ui); color: var(--sub);
-      transition: max-width .4s cubic-bezier(.32,.72,0,1), opacity .25s cubic-bezier(.32,.72,0,1), padding .4s cubic-bezier(.32,.72,0,1); }
-    #dock .dvzh.on { max-width: 340px; opacity: 1; padding: 0 8px; }
     body.dvedit #ctx { z-index: 70; } #ctx > .msw:only-child { margin-bottom: 0; border-bottom: 0; }   /* the right-click menu over the panels */`;
   document.head.appendChild(st);
   hy.register(TYPE, {

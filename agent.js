@@ -21,12 +21,13 @@
 // "accent" {c}: the colour of the marks, Dev Studio's green as the board resolves it (a CSS colour; owner 2026-10-09, the picked element in
 // blue: «у нас это синего цвета вместо зеленого»), the dark green until it comes;
 // "where" {keys}: the pins' points of these elements now (see «One rule» below), and after each scroll or resize until asked for other
-// keys; "zoom" {on}: the page has the zoom (the person clicked into it), its pinch stays its own; "spot" {i}: where a comment on that
+// keys; "spot" {i}: where a comment on that
 // element goes, answered {spot: {i, el, pt, vp, n, pin?}} as a pick (a comment from the board's tree, treecomments.js); "unspot" {n}:
 // that comment was cancelled, the boxes its spot scrolled go back.
-// Zoom (owner 2026-10-08, Hyimg ui/framezoom.js): a pinch, ⌃ or ⌘ with the wheel go to the board as {zoom: {x, y, dx, dy, mode, ctrl, meta}}
-// and never zoom the page, unless the page has the zoom or ⌥ is held; a press while the select tool is off sends {press: 1} (it gives the
-// page the zoom). The page cannot pinch-zoom its own viewport by touch either (touch-action, in a sheet of ours outside the DOM).
+// Zoom (owner 2026-10-08 and 2026-10-10, Hyimg ui/framezoom.js): a pinch, ⌃ or ⌘ with the wheel go to the board as {zoom: {x, y, dx, dy,
+// mode, ctrl, meta}} and never zoom the page; with ⌥ held the page gets that gesture, and if it does not take it (no preventDefault) the
+// board does: a pinch nobody took was Chromium's zoom of the whole app window. A click in the page no longer gives it the zoom (2026-10-10).
+// The page cannot pinch-zoom its own viewport by touch either (touch-action, in a sheet of ours outside the DOM).
 // A tree node: {i: id, t: tag, d: its id attribute, c: classes, x: the text of a leaf, k: children}; at most 15000 elements (cut: true).
 //
 // Where an element is in the file: the source is parsed by the browser's own parser (DOMParser, no scripts run) and its tree lined up
@@ -42,16 +43,19 @@
   const idOf = n => { let i = ids.get(n); if (!i) { i = next++; ids.set(n, i); nodes.set(i, new WeakRef(n)); } return i; };
   const byId = i => { const r = nodes.get(i), n = r && r.deref(); return n && n.isConnected ? n : null; };
   const send = m => { try { UP.postMessage(Object.assign({ hydev: 1 }, m), "*"); } catch (e) { /* the board is gone */ } };
-  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, zoomOwn = false, ACC = "", editMode = false;
+  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, ACC = "", editMode = false;
   // the zoom goes to the board (see the top): registered first, so the page's own listeners never see a gesture that is not theirs
   const zopt = { capture: true, passive: false };
+  const zoom = e => send({ zoom: { x: e.clientX, y: e.clientY, dx: e.deltaX, dy: e.deltaY, mode: e.deltaMode, ctrl: e.ctrlKey, meta: e.metaKey } });
+  // ⌥: the page's gesture; after all its listeners (the window's bubble, added during the dispatch) the board's, unless the page took it
+  let altZ = null;
+  const altLeft = e => { if (e !== altZ) return; altZ = null; if (!e.defaultPrevented) { e.preventDefault(); zoom(e); } };
   addEventListener("wheel", e => {
-    if (!(e.ctrlKey || e.metaKey) || e.altKey || zoomOwn) return;
-    e.preventDefault(); e.stopImmediatePropagation();
-    send({ zoom: { x: e.clientX, y: e.clientY, dx: e.deltaX, dy: e.deltaY, mode: e.deltaMode, ctrl: e.ctrlKey, meta: e.metaKey } });
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (e.altKey) { altZ = e; addEventListener("wheel", altLeft, { once: true, passive: false }); return; }
+    e.preventDefault(); e.stopImmediatePropagation(); zoom(e);
   }, zopt);
-  ["gesturestart", "gesturechange", "gestureend"].forEach(t => addEventListener(t, e => { if (!e.altKey && !zoomOwn) { e.preventDefault(); e.stopImmediatePropagation(); } }, zopt));
-  addEventListener("pointerdown", () => { if (!inspecting && !editing) send({ press: 1 }); }, { capture: true });
+  ["gesturestart", "gesturechange", "gestureend"].forEach(t => addEventListener(t, e => { if (!e.altKey) { e.preventDefault(); e.stopImmediatePropagation(); } }, zopt));
   try { const zs = new CSSStyleSheet(); zs.replaceSync("html { touch-action: pan-x pan-y; }"); document.adoptedStyleSheets = [...document.adoptedStyleSheets, zs]; } catch (e) { /* an old engine */ }
   const mine = n => n === host || (n.tagName === "SCRIPT" && /\/~hyp\//.test(n.getAttribute("src") || ""));
   const clsOf = el => (el.getAttribute("class") || "").replace(/\s+/g, " ").trim();
@@ -465,7 +469,6 @@
       place(); sendSel();
     }
     else if (d.a === "marks") { if (host) host.style.display = d.on ? "" : "none"; }
-    else if (d.a === "zoom") zoomOwn = !!d.on;
     else if (d.a === "accent" && typeof d.c === "string" && /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%/]+\)|color\(srgb[\d.\s/%]+\))$/i.test(d.c.trim())) {
       ACC = d.c.trim(); if (host) host.style.setProperty("--hyk", ACC); }
     else if (d.a === "edit") editMode = !!d.on;
