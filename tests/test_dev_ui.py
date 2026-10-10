@@ -19,7 +19,7 @@ from test_dev_studio import board, hy  # noqa: F401
 
 CEF = "Mozilla/5.0 (Macintosh) AppleWebKit/537.36 Chrome/154.0 Safari/537.36 HyimgCEF/1"
 MID = "(s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }"
-DOCKB = "#dock .dvbar button"
+DOCKB = "#dock .dvbar button.hy-dkb"   # the dock's icon buttons (Hyimg's one dock, 2026-10-10: the view % and Actions beside them)
 
 
 def enter(page, card="h1"):

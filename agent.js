@@ -506,6 +506,7 @@
     else if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === "Enter") { e.preventDefault(); send({ key: "done" }); }   // ⌘↵ Done (S-28)
     else if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === "KeyR") { e.preventDefault(); send({ key: "reload" }); }   // ⌥R the page
     else if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "z" || e.key === "я" || e.key === "Z")) { e.preventDefault(); send({ key: "z", shift: e.shiftKey }); }
+    else if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.code === "KeyK") { e.preventDefault(); send({ key: "acts" }); }   // ⌘K Actions (2026-10-10)
     else if (e.key === "Enter" && inspecting && sel) { e.preventDefault(); send({ key: "Enter" }); }
     // I turns the select tool on and off also while the page takes the clicks (it opens so, owner 2026-10-08), unless one of its fields is typed in
     else if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[vVмМiIшШ]$/.test(e.key)) { e.preventDefault(); send({ key: "i" }); }   // V selects (S-30), I too

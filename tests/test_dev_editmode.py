@@ -229,9 +229,9 @@ def test_the_block_matches_round_15(ed):  # noqa: F811
         assert [round(g["tile"]["w"]), round(g["tile"]["h"]), g["tile"]["br"]] == [30, 30, "7px"] and round(g["tile"]["x"] - g["blk"]["x"] - g["bl"]) == 14
         assert [g["b"]["fs"], g["b"]["fw"], g["q"]["fs"]] == ["13px", "600", "11.5px"], g
         assert g["crumb"].replace(" ", "").startswith("header#top›h1#title·1280×"), g["crumb"]
-        # the LED (Hyimg's <hy-led>): 6 px, idle before a write (a ring); on, in the green, after one
+        # the LED (Hyimg's <hy-led>): 6 px, idle before a write (a grey dot, round 18 question 17); on, in the green, after one
         assert [round(g["led"]["w"]), round(g["led"]["h"])] == [6, 6] and page.get_attribute(".dvr .ih .dvled", "data-s") == "idle"
-        assert page.get_attribute(".dvr .ih hy-led.dvled", "state") == "off"
+        assert page.get_attribute(".dvr .ih hy-led.dvled", "state") == "idle"
         # sections and fields of the inspector as drawn: 28 px heads, 24 px wells
         assert round(g["sh"]["h"]) == 28 and round(g["fld"]["h"]) == 24, g
         # the block scrolls under its header and the crumbs: both stay where they are

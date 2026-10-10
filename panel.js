@@ -5,7 +5,9 @@
 // count of this session's writes, and at its right end Edit, a mini toggle (E) between Inspect, the studio as it was, and Edit, the HTML
 // edited as in a browser's inspector (treeedit.js). Under it the picked element: its tag on a tile of the studio's green, the crumbs of
 // its parents (a click picks one), its size, and a 6 px status LED of the file: steady green when this session wrote to it, blinking while
-// a write is on its way, a ring before the first write and when this element or the file can't be saved (its title says which). History
+// a write is on its way, a grey dot before the first write, a ring when this element or the file can't be saved (its title says which;
+// owner 2026-10-10, round 18 question 17, version A: the ring said «nothing written yet» and «can't be saved» alike), red when a write
+// was refused. History
 // lists the writes of this session, the undone ones quiet; a click on one takes the file to the state right after it (one ⌘Z or ⇧⌘Z a
 // step), «Opened» to the file as Dev Studio found it.
 //
@@ -22,7 +24,7 @@ export const timeline = D => [...D.past.map(s => ({ s, on: true })), ...[...D.fu
 export const stepsTo = (D, j) => (j + 1) - D.past.length;
 
 // the file's LED, as markup: led() sets its state and its words
-export const LED = `<hy-led class="dvled" state="off"></hy-led>`;
+export const LED = `<hy-led class="dvled" state="idle"></hy-led>`;
 
 export function makePanel({ D, t, svg, EDITS, select, setEdit }) {
   const head = () => `<div class="hy-bh"><span class="dvtabs" role="tablist" aria-label="${esc(t("Inspector"))}">`
@@ -66,12 +68,12 @@ export function makePanel({ D, t, svg, EDITS, select, setEdit }) {
     }
     return `${tile}<div><b>${esc(det.t)}</b><span class="dvq">${q}</span></div>${LED}`;
   }
-  // the LED (<hy-led>): busy blinks, written steady in the Studio's green, nothing written yet or can't be saved a ring; data-s keeps
-  // which of the four it is (idle, busy, on, off) and its title says it
+  // the LED (<hy-led>): busy blinks, written steady in the Studio's green, nothing written yet a grey dot, can't be saved a ring, a write
+  // refused red; data-s keeps which of the five it is (idle, busy, on, off, err), the LED's state is the same word, its title says it
   function led() {
     const d = D(), l = d && d.ui.right.querySelector(".dvled"); if (!l) return;
     const off = d.ledOff || "", st = EDITS.busy() ? "busy" : d.saveErr ? "err" : off ? "off" : d.past.length ? "on" : "idle";   // err: a write refused (S-39)
-    if (l.dataset.s !== st) { l.dataset.s = st; l.setAttribute("state", st === "idle" ? "off" : st); }
+    if (l.dataset.s !== st) { l.dataset.s = st; l.setAttribute("state", st); }
     const tip = st === "busy" ? t("Writing to the file…") : st === "err" ? t("Not saved: {why}", { why: d.saveErr }) : st === "off" ? off : st === "on" ? t("Written to the file")
       : t("Edits go into the file as you make them");
     if (l.title !== tip) l.title = tip;
@@ -98,7 +100,9 @@ export function makePanel({ D, t, svg, EDITS, select, setEdit }) {
     const n = stepsTo(d, j);
     for (let k = 0; k < Math.abs(n); k++) (n < 0 ? EDITS.undo : EDITS.redo)();
   }
-  return { head, wire, tab, sync, crumb, led, history };
+  // a step's words, as History names it: the dock's Undo and Redo say them too (canvas.js, Hyimg's hyDock.steps)
+  const stepName = s => { const L = (s && s.label) || {}; return s ? [whatOf(L), L.el].filter(Boolean).join(" · ") : ""; };
+  return { head, wire, tab, sync, crumb, led, history, stepName };
 }
 
 export const CSS_PANEL = `

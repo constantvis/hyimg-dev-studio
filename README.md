@@ -24,7 +24,7 @@ A pinch, or ⌃ or ⌘ with the wheel, over the page zooms the board at the poin
 
 While the studio is open the board's selection outline is gone, so you see the card's edges. The card is lifted instead: a soft shadow under it and the rest of the board slightly darker. Hyimg does this for every studio (`review/ui/editlift.js`).
 
-The tree follows the page: if a script adds rows, the tree shows them within a second. Esc steps out: first the selection, then Dev Studio. **Done** in the dock or **Board** in the switch closes it and puts the camera back. ⌘. hides the panels together with the rest of the interface.
+The tree follows the page: if a script adds rows, the tree shows them within a second. Esc steps out: first the selection, then Dev Studio. **Done** top right or **Board** in the switch closes it and puts the camera back. ⌘K, also with the keyboard in the page, or Actions in the dock lists every command with a search; point at Undo or Redo to see which edit it takes back. ⌘. hides the panels together with the rest of the interface.
 
 ## Editing
 
@@ -52,7 +52,7 @@ The frames plugin's HTML frames open in Dev Studio too, by a double-click or the
 
 ## Inspector, History and Edit mode
 
-The right block has two tabs, **Inspector** and **History**, and under them the picked element: its tag, its parent and itself as crumbs (a click on the parent picks it), its size, and a 6 px light for the file. The light is a ring before the first write and when the element can't be saved (its tooltip says which), green once this session wrote to the file, blinking while a write is on its way. History lists this session's writes, the undone ones dimmed, the newest last. A click on one takes the file to the state right after it, **Opened** takes it back to the file as Dev Studio found it.
+The right block has two tabs, **Inspector** and **History**, and under them the picked element: its tag, its parent and itself as crumbs (a click on the parent picks it), its size, and a 6 px light for the file. The light is a grey dot before the first write, a ring when the element or the file can't be saved (its tooltip says why), green once this session wrote to the file, blinking while a write is on its way, red when a write was refused. Until 2026-10-10 the light was a ring before the first write too, so «nothing written yet» looked the same as «can't be saved» (owner, round 18 question 17). History lists this session's writes, the undone ones dimmed, the newest last. A click on one takes the file to the state right after it, **Opened** takes it back to the file as Dev Studio found it.
 
 **Edit** at the right end of the block's header, or E, turns on Edit mode: the HTML is edited the way a browser's inspector edits it (owner 2026-10-09: «как в браузере в инспекторе можно редактировать, так же и тут»). E again goes back to Inspect, the studio as before. Select turns on with Edit mode and goes back to how it was when you leave it.
 

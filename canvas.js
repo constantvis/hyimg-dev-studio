@@ -34,7 +34,7 @@ import { drawEdit, wire, why, CSS_EDIT } from "./inspect.js";
 import { makeCards, TYPE } from "./cards.js";
 import { makeTreeComments } from "./treecomments.js";
 import { makePanel, CSS_PANEL, LED } from "./panel.js";
-import { makeTreeEdit, CSS_TREEEDIT } from "./treeedit.js";
+import { makeTreeEdit, CSS_TREEEDIT } from "./treeedit.js"; import { studioDock } from "./dock.js";   // Hyimg's one dock: step names, Actions (2026-10-10)
 
 const FRAME_TYPE = "htmlframe";   // the frames plugin's HTML frame, a library page as well
 const VW = 1280, VH = 800, ROWS = 3000;
@@ -82,6 +82,8 @@ async function openDev(id) {
   D.zoom = window.hyFrameZoom ? hyFrameZoom.attach(f) : null;
   D.wait = setTimeout(() => { if (D && !D.tree) { D.info.none = true; drawTree(); } }, 6000);
   D.ui = buildUI(); HY.dock(D.bar); drawBar(); PN.sync();
+  D.sdock = studioDock({ D: () => D, t: (k, v) => t(k, v), svg, EDITS, PN, pick: () => setPicking(!D.picking), comment: () => setCommenting(!D.commenting),
+    edit: () => setEdit(!D.edit), del: () => TE.del(), reload: () => reload(), done: () => closeDev() });
   D.ui.right.addEventListener("focusout", () => setTimeout(() => { if (D && D.dirty) drawInspector(); }, 0));
   if (HY.full) HY.full(true);   // the library folds while the editor is open, it comes back on Done, as for the 3D studio
   if (HY.select) HY.select([]);   // the board's selection (its bar, the card's corners) stays off the page being edited
@@ -105,7 +107,7 @@ function teardown() {
   // the pins a tree row lit go dark (Esc leaves with the pointer still on that row, whose pointerleave never comes); the live points go
   if (window.hyComments && hyComments.light) hyComments.light([]); WHERE.clear();
   clearTimeout(d.still); if (d.wrote) C.BUST.set(d.src, d.rev);   // the card's picture of the page as it is now
-  d.unplace(); d.ui.root.remove(); HY.dock(null);
+  if (d.sdock) d.sdock.destroy(); d.unplace(); d.ui.root.remove(); HY.dock(null);
   if (HY.full) HY.full(false);
   const it = HY.board.items[d.id];
   if (it && d.wrote) { if (it.type === TYPE) C.card(d.el, it); else if (HY.changed) HY.changed(d.id); }   // a frame: its own plugin draws its still again
@@ -183,6 +185,8 @@ function wrote() {
   D.still = setTimeout(() => { C.BUST.set(d.src, d.rev); const it = HY.board.items[d.id];
     if (it && it.type === TYPE) fetch(C.stillUrl(it, d.el._s || 640)).catch(() => {}); }, 1500);
 }
+// one step of ⌘Z or ⇧⌘Z (redo true), then its name over the dock's button for 2 s (dock.js)
+function step(redo) { const d = D; Promise.resolve((redo ? EDITS.redo : EDITS.undo)()).then(() => { if (d && D === d && d.sdock) d.sdock.done(redo ? "redo" : "undo"); }); }
 function drawBar() {
   if (!D) return;
   const u = D.bar.querySelector("[data-a=undo]"), r = D.bar.querySelector("[data-a=redo]");
@@ -213,7 +217,8 @@ addEventListener("message", e => {
   if (d.text) EDITS.text(d.text.i, d.text.was, d.text.text);
   if (d.finished && D.finished) D.finished();   // the page ended its typing (settleEdits)
   if (d.key === "Escape") onKey({ key: "Escape", preventDefault() {} });
-  if (d.key === "z") (d.shift ? EDITS.redo : EDITS.undo)();
+  if (d.key === "z") step(d.shift);
+  if (d.key === "acts" && D.sdock) D.sdock.toggle();   // ⌘K in the page
   if (d.key === "Enter" && D.detail) typeText(D.detail);
   if (d.key === "i") setPicking(!D.picking);
   if (d.key === "done") closeDev();   // ⌘↵ in the page (P4 S-28)
@@ -289,20 +294,21 @@ function buildUI() {
   // top right, Hyimg's one place for a Studio's session actions (ui/hy/actions.js; owner 2026-10-09: «кнопки Done у нас всегда
   // стандартизированы справа вверху, а не внизу»)
   const bar = document.createElement("span"); bar.className = "dvbar";
-  bar.innerHTML = `<button data-tool="pick" aria-pressed="false" title="${esc(t("Select elements in the page; off, the page takes the clicks · V"))}" aria-label="${esc(t("Select"))}">${svg(IC.pick, 17)}<kbd>V</kbd></button>`
-    + `<button data-tool="comment" aria-pressed="false" title="${esc(t("Annotation on an element: click it in the page · C"))}" aria-label="${esc(t("Annotation"))}">`
+  bar.innerHTML = `<button class="hy-dkb" data-tool="pick" aria-pressed="false" title="${esc(t("Select elements in the page; off, the page takes the clicks · V"))}" aria-label="${esc(t("Select"))}">${svg(IC.pick, 17)}<kbd>V</kbd></button>`
+    + `<button class="hy-dkb" data-tool="comment" aria-pressed="false" title="${esc(t("Annotation on an element: click it in the page · C"))}" aria-label="${esc(t("Annotation"))}">`
     + `${svg("comment", 17)}<kbd>C</kbd></button>`
-    + (window.hyAnnot && hyAnnot.drawing ? `<button data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
+    + (window.hyAnnot && hyAnnot.drawing
+      ? `<button class="hy-dkb" data-a="draw" title="${esc(t("Draw over the page · P"))}" aria-label="${esc(t("Draw"))}">${svg("marker", 17)}<kbd>P</kbd></button>` : "")
     + `<span class="sep" aria-hidden="true"></span>`
-    + `<button data-a="undo" disabled title="${esc(t("Undo the last edit of the file · ⌘Z"))}" aria-label="${esc(t("Undo"))}">${svg("undo", 17)}</button>`
-    + `<button data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button>`;
+    + `<button class="hy-dkb" data-a="undo" disabled title="${esc(t("Undo the last edit of the file · ⌘Z"))}" aria-label="${esc(t("Undo"))}">${svg("undo", 17)}</button>`
+    + `<button class="hy-dkb" data-a="redo" disabled title="${esc(t("Redo · ⇧⌘Z"))}" aria-label="${esc(t("Redo"))}">${svg("redo", 17)}</button>`
+    + `<span class="sep" aria-hidden="true"></span><span class="dgrp" data-dk="view"></span><span class="sep" aria-hidden="true"></span><span data-dk="acts"></span>`;
   bar.addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b || !D) return;
     if (b.dataset.tool === "pick") return setPicking(!D.picking);
     if (b.dataset.tool === "comment") return setCommenting(!D.commenting);
     if (b.dataset.a === "draw" && window.hyAnnot && hyAnnot.drawing) return hyAnnot.tool("pen");
-    if (b.dataset.a === "undo") EDITS.undo();
-    if (b.dataset.a === "redo") EDITS.redo();
+    if (b.dataset.a === "undo" || b.dataset.a === "redo") step(b.dataset.a === "redo");
   });
   D.bar = bar;
   // Live view (the frames plugin's own view of its HTML frame), Reload, Open in <Browser> (the page alone, still sandboxed), Done
@@ -416,7 +422,8 @@ function onKey(e) {
   if (e.altKey && !mod && !e.shiftKey && e.code === "KeyR") { e.preventDefault(); reload(); return true; }
   if (mod) {   // ⌘Z, ⇧⌘Z and ⌘Y are Dev's own, also with nothing to take back (P4 S-07: ⌘Z then undid the board); ⌘. and the rest the app's
     const z = /^[zZяЯ]$/.test(e.key), y = /^[yYнН]$/.test(e.key) && !e.shiftKey;
-    if (!e.altKey && (z || y)) { e.preventDefault(); (e.shiftKey || y ? EDITS.redo : EDITS.undo)(); return true; }
+    if (!e.altKey && (z || y)) { e.preventDefault(); step(e.shiftKey || y); return true; }
+    if (!e.altKey && !e.shiftKey && (e.code === "KeyK" || /^[kKлЛ]$/.test(e.key))) { e.preventDefault(); if (D.sdock) D.sdock.toggle(); return true; }   // ⌘K Actions
     if (e.key === "Enter" && !e.altKey && !e.shiftKey) { e.preventDefault(); closeDev(); return true; }   // ⌘↵ Done, the primary (P4 S-28)
     return false;
   }
@@ -477,8 +484,8 @@ export function register(hy) {
        pointed at, never squeezed by a narrow dock; one size for Select, Comment, Draw, Undo and Redo (owner 2026-10-09, an arrow at the
        dock: «размеры элементов внизу не соответствуют»: Select and Comment were 34 px circles, Draw, Undo and Redo 45 px pills). The width
        !important and :not(#_): the 3D studio's own rule for its dock's tools, 34 px !important, is not scoped to its dock and reached here */
-    #dock .plgdock.dvbar:not(#_) button { width: 36px !important; padding: 0 !important; justify-content: center; background: transparent !important; flex: none; }
-    #dock .plgdock.dvbar:not(#_) button:hover:not(.on, .pri, :disabled) { background: var(--raise) !important; }
+    #dock .plgdock.dvbar:not(#_) button:not(.wide) { width: 36px !important; padding: 0 !important; justify-content: center; background: transparent !important; flex: none; }
+    #dock .plgdock.dvbar:not(#_) button:not(.wide):hover:not(.on, .pri, :disabled) { background: var(--raise) !important; }
     #dock .plgdock.dvbar:not(#_) button:is(.on, .pri) { background: var(--dev) !important; color: var(--hy-on-accent, #fff) !important; }   /* over canvas.html's ink */
     .dvui { --dv-r: var(--hy-trow-r, 8px); color: var(--ink); font: 400 13px/1.4 var(--sans, system-ui); }
     .dvp { position: fixed; z-index: 60; box-shadow: var(--plate-sh, 0 16px 50px rgba(0,0,0,.35)); }

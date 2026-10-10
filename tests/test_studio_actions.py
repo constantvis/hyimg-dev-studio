@@ -32,7 +32,7 @@ def test_dev_studio_actions_top_right(hy):  # noqa: F811
         enter(page)
         # Reload, Open in browser, Done; none of them in the dock any more
         assert page.evaluate(ACTS) == ["reload", "open", "done"]
-        assert page.evaluate(DOCK) == ["pick", "comment", "undo", "redo"], page.evaluate(DOCK)   # no Draw (hyimg docs/LATER.md)
+        assert page.evaluate(DOCK) == ["pick", "comment", "undo", "redo", "acts"], page.evaluate(DOCK)   # no Draw (hyimg docs/LATER.md); Actions ⌘K (2026-10-10)
         assert page.evaluate("() => !!document.querySelector('#dock #modes')")
         # the top row's line and height, at its gutter: in a Studio the board's round buttons are away (owner 2026-10-09 on round 14's
         # 3D Studio: «В режиме студии мы вот эти все элементы убираем»)

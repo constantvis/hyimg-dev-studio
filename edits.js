@@ -189,10 +189,11 @@ export function makeEdits(ctx) {
       });
     });
   }
-  // ⌘Z and ⇧⌘Z: the file back as it was before the step (or after it), the page follows
+  // ⌘Z and ⇧⌘Z: the file back as it was before the step (or after it), the page follows; resolves once the step is done (the dock then
+  // names it, dock.js)
   function step(back) {
     for (const p of [...pending.values()]) p.go();   // a change still settling is written first, so ⌘Z takes back that change
-    queue(async () => {
+    return queue(async () => {
       const D = ctx.D(); if (!D) return;
       const from = back ? D.past : D.future, to = back ? D.future : D.past, s = from.pop();
       if (!s) return;

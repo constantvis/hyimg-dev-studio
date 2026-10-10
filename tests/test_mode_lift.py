@@ -122,7 +122,7 @@ def test_dev_opens_interactive_and_i_turns_select_on(lift):
         page.wait_for_function("() => __dev.D && __dev.D.tree", timeout=20000)
         frame = next(f for f in page.frames if "/sandbox/" in f.url)
         assert page.evaluate("__dev.D.picking") is False and page.get_attribute(".dvbar [data-tool=pick]", "aria-pressed") == "false"
-        assert page.evaluate("[...document.querySelectorAll('.dvbar [data-tool]')].map(b => b.getAttribute('aria-pressed') + b.className).join()") == "false,false"
+        assert page.evaluate("[...document.querySelectorAll('.dvbar [data-tool]')].map(b => b.getAttribute('aria-pressed') + b.classList.contains('on')).join()") == "falsefalse,falsefalse"
         assert "The page takes the clicks" in page.inner_text(".dvr .dhint")
         # a press on the page's own button reaches the page: it adds a row to its list
         frame.wait_for_function("() => document.querySelectorAll('li').length === 2")

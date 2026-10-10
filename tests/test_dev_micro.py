@@ -3,7 +3,8 @@
 the dark theme:
 
 - each place uses the primitive, none of the plugin's own looks: Edit in the block's header is <hy-minitoggle>, the file's light
-  <hy-led> (a ring before the first write, the Studio's green after it), «This element | Everywhere» <hy-segmented variant=micro>, the
+  <hy-led> (a grey dot before the first write, a ring when it can't be saved, the Studio's green after a write: three looks, owner
+  2026-10-10, round 18 question 17, version A), «This element | Everywhere» <hy-segmented variant=micro>, the
   inspector's number fields drag by their label (scrub()), a written row wears .hy-dot, the tree row's + and bin are .hy-ri on a .hy-hovrow
 - scrubbing W: the page follows the drag, nothing is written while the button is held, the file takes it once as it ends, one step of
   ⌘Z, which brings the first bytes back; ⇧ ten times, ⌥ a tenth; Esc while dragging puts the value back and writes nothing; a click on
@@ -68,12 +69,20 @@ def test_each_place_wears_the_micro_primitive(ed):  # noqa: F811
         assert mt.evaluate("m => [m.hasAttribute('checked'), m.querySelector('input').checked, getComputedStyle(m, '::before').backgroundColor]") == [True, True, green]
         mt.click(); page.wait_for_function("() => !__dev.D.edit")
 
-        # 4 · the file's LED: hy-led, 6 px, flat; a ring before the first write
+        # 4 · the file's LED: hy-led, 6 px, flat; before the first write a grey dot (owner 2026-10-10, round 18 question 17, version A:
+        # the ring said «nothing written yet» and «can't be saved» alike), a ring when the file can't be saved, the green after a write
         led = page.locator(".dvr .ih hy-led.dvled")
         assert led.count() == 1 and page.locator(".dvr span.dvled").count() == 0
-        got = led.evaluate("l => { const s = getComputedStyle(l), r = l.getBoundingClientRect(); return [l.getAttribute('state'), l.dataset.s, Math.round(r.width), "
-                           "Math.round(r.height), s.backgroundColor, s.boxShadow.includes('inset'), l.getAttribute('role'), l.getAttribute('aria-label')]; }")
-        assert got[:7] == ["off", "idle", 6, 6, "rgba(0, 0, 0, 0)", True, "img"] and got[7], got
+        look = ("l => { const s = getComputedStyle(l), r = l.getBoundingClientRect(); return [l.getAttribute('state'), l.dataset.s, Math.round(r.width), "
+                "Math.round(r.height), s.backgroundColor, s.boxShadow.includes('inset'), l.getAttribute('role'), l.getAttribute('aria-label')]; }")
+        grey = page.evaluate(PROBE, ["var(--muted)", "background-color"])
+        got = led.evaluate(look)
+        assert got[:7] == ["idle", "idle", 6, 6, grey, False, "img"] and got[7] == "Edits go into the file as you make them", got
+        page.evaluate("() => { __dev.D.srcErr = 'read only'; __dev.D.redraw(); }")
+        got = led.evaluate(look)
+        assert got[:7] == ["off", "off", 6, 6, "rgba(0, 0, 0, 0)", True, "img"] and "read only" in got[7], got
+        page.evaluate("() => { __dev.D.srcErr = ''; __dev.D.redraw(); }")
+        assert led.evaluate(look)[:2] == ["idle", "idle"]
 
         # 3 · «This element | Everywhere» of a colour from a custom property: the micro segments, 18 px options in a 22 px well
         hero(page, frame)

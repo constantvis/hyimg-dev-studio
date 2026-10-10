@@ -50,6 +50,9 @@ const RU = {
   "The frame's live view: device sizes, its edges resize the page": "Живой просмотр фрейма: размеры устройств, края рамки меняют страницу",
   "Done · Esc": "Готово · Esc",
   "Done": "Готово",
+  // the one dock and its Actions (dock.js, owner 2026-10-10 on round 18)
+  "Tools": "Инструменты", "View": "Вид", "Delete the element": "Удалить элемент", "Fit the card between the panels": "Вписать карточку между панелями",
+  "Open in browser": "Открыть в браузере",
   "Page": "Страница",
   "Viewport": "Вьюпорт",
   "<b>Click</b> an element in the page or the tree to edit it, <b>⇧</b> adds one": "<b>Клик</b> по элементу на странице или в дереве, чтобы его править, <b>⇧</b> добавляет еще один",
