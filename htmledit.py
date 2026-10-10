@@ -9,7 +9,15 @@ then name a start tag by its offset and tag, checked here against the file of th
 
 Edits, the only ones there are: a property of an element's style attribute (style), the text of an element without elements inside
 (text), the value of a custom property declared in a top-level :root or html rule of a <style> of the file (var). Values are checked:
-known properties only, no quotes, angle brackets, braces, semicolons, backslashes or comments."""
+known properties only, no quotes, angle brackets, braces, semicolons, backslashes or comments.
+
+Edit mode's (owner 2026-10-09 on round 15: «я бы еще добавил режим редактирования HTML ... как в браузере в инспекторе можно
+редактировать»), each again only the bytes it names: an element's attributes set, added or removed (attrs, any name but data-hy-at,
+any value: it is written between the attribute's own quotes, escaped), its tag renamed in its start tag and its end tag (tag), the element
+removed from its start tag to the end of its end tag, with its line when nothing else stands on it (remove). The last two need the
+element's end in the file: the end tag that closes it, counting the same tags nested in it. An element whose end tag is left out (an li
+before the next li) is refused, and so is one where the file's start tags inside it are not as many as the page parsed (inner): then the
+browser closed it somewhere else than its end tag."""
 import hashlib
 import html
 import re
@@ -17,9 +25,14 @@ from html.parser import HTMLParser
 
 MARK = "data-hy-at"
 PROPS = ("color", "background-color", "border-color", "border-width", "border-style", "border-radius", "font-size", "font-weight",
-         "opacity", "padding", "gap", "width", "height")
+         "opacity", "padding", "gap", "width", "height", "filter")
 RAW = ("title", "textarea", "xmp", "iframe", "noembed", "noframes", "plaintext")   # their content is text to the browser, not tags
 IMPLIED_END = ("p", "li", "dt", "dd", "option", "optgroup", "td", "th", "tr", "rb", "rt", "rp")   # their end tag may be left out
+VOID = ("area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr", "keygen")
+FIXED = ("html", "head", "body")   # the page's frame: never renamed or removed
+ATTR = re.compile(r"[^\s\"'>/=\x00-\x1f\x7f]{1,200}")
+TAGNAME = re.compile(r"[A-Za-z][A-Za-z0-9-]{0,60}")
+CTRL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 VALUE = re.compile(r"[^;{}<>\"'\\\n\r]{1,200}")
 
 
@@ -42,34 +55,38 @@ def rev(data):
 class _Scan(HTMLParser):
     def __init__(self, text):
         super().__init__(convert_charrefs=False)
-        self.text, self.tags, self.styles, self._open = text, [], [], None
+        self.text, self.tags, self.styles, self._open, self.events = text, [], [], None, []
         self.lines = [0] + [m.end() for m in re.finditer("\n", text)]
 
     def _pos(self):
         ln, col = self.getpos()
         return self.lines[ln - 1] + col
 
-    def handle_starttag(self, tag, attrs):
+    def handle_starttag(self, tag, attrs, closed=False):
         at, raw = self._pos(), self.get_starttag_text() or ""
-        if self.text.startswith(raw, at): self.tags.append((at, at + len(raw), tag))
-        if tag == "style": self._open = at + len(raw)
-        if tag in RAW: self.set_cdata_mode(tag)
+        if self.text.startswith(raw, at):
+            self.tags.append((at, at + len(raw), tag)); self.events.append(("s", at, at + len(raw), tag, closed))
+        if tag == "style" and not closed: self._open = at + len(raw)
+        if tag in RAW and not closed: self.set_cdata_mode(tag)
 
     def handle_startendtag(self, tag, attrs):
-        at, raw = self._pos(), self.get_starttag_text() or ""
-        if self.text.startswith(raw, at): self.tags.append((at, at + len(raw), tag))
+        self.handle_starttag(tag, attrs, True)
 
     def handle_endtag(self, tag):
+        at = self._pos()
         if tag == "style" and self._open is not None:
-            self.styles.append((self._open, self._pos())); self._open = None
+            self.styles.append((self._open, at)); self._open = None
+        if self.text.startswith("</", at):
+            gt = self.text.find(">", at); self.events.append(("e", at, len(self.text) if gt < 0 else gt + 1, tag, False))
 
 
 def scan(text):
-    """{"tags": [(start, end, tag)], "styles": [(content start, content end)]} of the file's start tags and <style> blocks"""
+    """{"tags": [(start, end, tag)], "styles": [(content start, content end)], "events": [("s" | "e", start, end, tag, self-closed)]} of
+    the file's start tags, <style> blocks, and its start and end tags in order"""
     s = _Scan(text)
     try: s.feed(text); s.close()
     except Exception: pass   # the parser gave up on broken markup: what it found stays
-    return {"tags": s.tags, "styles": s.styles}
+    return {"tags": s.tags, "styles": s.styles, "events": s.events}
 
 
 def annotate(text, sc=None):
@@ -264,8 +281,104 @@ def set_var(text, name, value, sc=None):
     raise Refused(f"{name} is not declared in a :root rule of this file")
 
 
+def _quote(v, q):
+    v = v.replace("&", "&amp;")
+    return v.replace('"', "&quot;") if q == '"' else v.replace("'", "&#39;")
+
+
+def _end_of_open(text, end, attrs):
+    """where a new attribute goes in a start tag ending at `end`: before its /> when the slash is not part of an unquoted value, else before >"""
+    return end - 2 if text.startswith("/>", end - 2) and (not attrs or text[end - 3] in " \t\n\"'") else end - 1
+
+
+def set_attrs(text, at, tag, changes, was=None):
+    """splices that set each {name: value} attribute of the element (None removes it, a new one goes at the end of its start tag); was
+    {name: value | None}, the attributes as the page parsed the file, must match the file"""
+    name, end, attrs = tag_at(text, at)
+    if name != tag: raise Refused(f"the file has <{name}> there, not <{tag}>")
+    if not isinstance(changes, dict) or not changes or len(changes) > 50: raise Refused("no attributes")
+    cuts, adds = [], []
+    for raw, v in changes.items():
+        n = str(raw)
+        if not ATTR.fullmatch(n) or n.lower() == MARK: raise Refused(f"not an attribute Dev Studio writes: {n[:40]}")
+        if v is not None and (not isinstance(v, str) or len(v) > 20000 or CTRL.search(v)): raise Refused(f"not a value Dev Studio writes for {n[:40]}")
+        found = [a for a in attrs if a["name"] == n.lower()]
+        cur = None if not found else "" if found[0]["vstart"] is None else html.unescape(text[found[0]["vstart"]:found[0]["vend"]])
+        if isinstance(was, dict) and n in was and was[n] != cur:
+            raise Refused(f"the file's {n[:40]} is not the one the page shows: a script changed it")
+        if v is None:
+            for a in found:   # the attribute with the space before it
+                s = a["start"]
+                while s > at and text[s - 1].isspace(): s -= 1
+                cuts.append((s, a["end"], ""))
+        elif found:
+            a = found[0]
+            if cur == v: continue
+            if a["vstart"] is None: cuts.append((a["end"], a["end"], f'="{_quote(v, chr(34))}"'))
+            elif not a["q"]: cuts.append((a["vstart"], a["vend"], f'"{_quote(v, chr(34))}"'))
+            else: cuts.append((a["vstart"], a["vend"], _quote(v, a["q"])))
+        else:
+            adds.append(f' {n}="{_quote(v, chr(34))}"')
+    if adds:
+        cut = _end_of_open(text, end, attrs)
+        cuts.append((cut, cut, "".join(adds)))
+    return cuts
+
+
+def extent(text, at, tag, inner=None, sc=None):
+    """(start, end, end tag's start or None) of the element whose start tag is at `at`: its end tag is the first </tag> not taken by a
+    <tag> nested in it; inner, the start tags inside it the page parsed from the file, must be as many as the file has there"""
+    name, tend, _a = tag_at(text, at)
+    if name != tag: raise Refused(f"the file has <{name}> there, not <{tag}>")
+    sc = sc or scan(text)
+    ev = sc["events"]
+    k = next((j for j, e in enumerate(ev) if e[0] == "s" and e[1] == at), None)
+    if k is None: raise Refused("not a start tag the file's parser sees")
+    if name in VOID or ev[k][4]: return at, ev[k][2], None
+    depth, close = 0, None
+    for e in ev[k + 1:]:
+        if e[3] != name: continue
+        if e[0] == "s" and not e[4]: depth += 1
+        elif e[0] == "e":
+            if not depth: close = e; break
+            depth -= 1
+    if not close: raise Refused(f"the file leaves out this <{name}>'s end tag")
+    if inner is not None:
+        n = sum(1 for e in ev if e[0] == "s" and ev[k][2] <= e[1] < close[1])
+        if n != inner: raise Refused("the browser closes this element elsewhere than its end tag in the file")
+    return at, close[2], close[1]
+
+
+def rename(text, at, tag, new, inner=None, sc=None):
+    """splices that rename the element's start tag and its end tag"""
+    if not isinstance(new, str) or not TAGNAME.fullmatch(new): raise Refused("not a tag name")
+    new = new.lower()
+    for n in (tag, new):
+        if n in FIXED or n in VOID or n in RAW or n in ("script", "style", "template"): raise Refused(f"Dev Studio doesn't rename <{tag}> to <{new}>")
+    _s, _e, close = extent(text, at, tag, inner, sc)
+    old = re.compile(r"<([A-Za-z][^\s/>]*)").match(text, at)
+    cuts = [(at + 1, old.end(), new)]
+    if close is not None:
+        m = re.compile(r"</\s*([A-Za-z][^\s/>]*)").match(text, close)
+        if m: cuts.append((m.start(1), m.end(1), new))
+    return cuts
+
+
+def remove(text, at, tag, inner=None, sc=None):
+    """a splice that takes the element out of the file, its line too when nothing else stands on it"""
+    if tag in FIXED: raise Refused(f"Dev Studio doesn't remove <{tag}>")
+    s, e, _c = extent(text, at, tag, inner, sc)
+    ls = text.rfind("\n", 0, s) + 1
+    le = text.find("\n", e); le = len(text) if le < 0 else le
+    if not text[ls:s].strip() and not text[e:le].strip():
+        if le < len(text): s, e = ls, le + 1
+        elif ls > 0: s, e = ls - 1, le
+    return s, e, ""
+
+
 def apply(text, ops):
-    """the file's text with the ops: [{op: "style", at, tag, set: {prop: value}} | {op: "text", at, tag, was, text} | {op: "var", name, value}]"""
+    """the file's text with the ops: [{op: "style", at, tag, set: {prop: value}} | {op: "text", at, tag, was, text} | {op: "var", name, value}
+    | {op: "attrs", at, tag, set: {name: value | None}, was} | {op: "tag", at, tag, name, inner} | {op: "remove", at, tag, inner}]"""
     if not isinstance(ops, list) or not ops or len(ops) > 200: raise Refused("no edits")
     sc, merged, cuts = None, {}, []
     for o in ops:
@@ -279,6 +392,14 @@ def apply(text, ops):
         elif o.get("op") == "var":
             sc = sc or scan(text)
             cuts.append(set_var(text, o.get("name"), o.get("value"), sc))
+        elif o.get("op") == "attrs":
+            cuts.extend(set_attrs(text, o.get("at"), o.get("tag"), o.get("set"), o.get("was")))
+        elif o.get("op") == "tag":
+            sc = sc or scan(text)
+            cuts.extend(rename(text, o.get("at"), o.get("tag"), o.get("name"), o.get("inner"), sc))
+        elif o.get("op") == "remove":
+            sc = sc or scan(text)
+            cuts.append(remove(text, o.get("at"), o.get("tag"), o.get("inner"), sc))
         else:
             raise Refused(f"not an edit Dev Studio makes: {str(o.get('op'))[:40]}")
     for (at, tag), ch in merged.items():

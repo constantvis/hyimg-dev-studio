@@ -28,7 +28,9 @@ The tree follows the page: if a script adds rows, the tree shows them within a s
 
 ## Editing
 
-Since 0.2 the inspector edits the selected elements: Layout (width and height when the page sets them, padding, the gap of a flex or grid box), Appearance (opacity, corners), Fill, Text (colour, size, weight) and Stroke (colour, width). A colour opens the system colour picker, or you type any CSS colour into its field. The change shows in the page at once and lands in the file half a second after you stop. With several elements selected, every one of them gets it.
+Since 0.2 the inspector edits the selected elements: Layout (width and height, «auto» until you type a number, padding, the gap of a flex or grid box), Appearance (opacity, corners, blur), Fill, Text (colour, size, weight) and Stroke (colour, width). A colour opens the system colour picker, or you type any CSS colour into its field. The change shows in the page at once and lands in the file half a second after you stop. With several elements selected, every one of them gets it.
+
+Every number field drags by its label, as in Figma: W, H, Padding, Gap, Corners, Blur, the text's Size and the stroke's Width. Drag the letter left or right and the number follows. Hold ⇧ to go ten times faster, ⌥ to go ten times finer. The page follows the drag, and the file takes the value once, when you let go, so a drag is one step of ⌘Z. Esc during the drag puts the old value back and writes nothing. Click the label without moving to type the number: Enter writes it, Esc puts it back. Padding and stroke width with different sides move every side by the same amount, none below 0. W and H at «auto» start from the element's size in the page. The handle and the controls of the block are Hyimg's shared micro elements (`review/ui/hy`): the Edit mini toggle, the file's light, the «This element | Everywhere» micro segments, the change dot and the row's icons on hover.
 
 When a value comes from a custom property, say `background: var(--purple)` with `--purple` declared in `:root`, the inspector names the property and asks: **This element** writes the colour into this element only, **Everywhere · 3** changes the declaration, so its 3 uses in the file follow.
 
@@ -48,6 +50,20 @@ The page still runs sandboxed. The edits are made by the board, through `POST /a
 
 The frames plugin's HTML frames open in Dev Studio too, by a double-click or the switch, as long as their live view isn't open. The frame's live view (device sizes, edges that resize the page) stays one click away: **Live view** in Dev Studio's dock, or on the bar over the selected frame. With this plugin turned off in Settings › Plugins, a double-click on a frame opens its live view as before, and the HTML cards stay on the board as their pictures, marked «Plugin off».
 
+## Inspector, History and Edit mode
+
+The right block has two tabs, **Inspector** and **History**, and under them the picked element: its tag, its parent and itself as crumbs (a click on the parent picks it), its size, and a 6 px light for the file. The light is a ring before the first write and when the element can't be saved (its tooltip says which), green once this session wrote to the file, blinking while a write is on its way. History lists this session's writes, the undone ones dimmed, the newest last. A click on one takes the file to the state right after it, **Opened** takes it back to the file as Dev Studio found it.
+
+**Edit** at the right end of the block's header, or E, turns on Edit mode: the HTML is edited the way a browser's inspector edits it (owner 2026-10-09: «как в браузере в инспекторе можно редактировать, так же и тут»). E again goes back to Inspect, the studio as before. Select turns on with Edit mode and goes back to how it was when you leave it.
+
+- In the tree, a double click on a row's tag renames the element, on its #id or .classes edits that attribute, on a leaf's text edits the text. Enter applies, Esc cancels, clicking away applies. Under the pointer a row shows + (type attributes as `name="value"`) and a bin. ⌫ or Delete deletes the selected elements.
+- In the inspector, Attributes lists every attribute as a name and a value you can type in, `class` and `style` included. The page follows as you type, Enter or leaving the field writes it, Esc puts it back. × removes an attribute, + adds some.
+- In the page, a double click on a text types it, with Select on or off.
+
+A row whose element was written gets a green dot. Each change is one step of ⌘Z, and undoing a delete puts the element back where it stood in the page.
+
+What goes into the file: only the bytes of that change. An attribute's value is written between its own quotes and escaped, a rename changes the start tag's name and the end tag's, a delete takes the element from its start tag to the end of its end tag, and its whole line when nothing else stands on it. The rest of the file stays byte for byte. To find an element's end tag the server counts the same tags nested in it, and it checks that the number of start tags inside matches what the page parsed. When the file leaves an end tag out (an `li` followed by the next `li`) or the browser closes the element somewhere else, the rename or delete is refused with the reason, and nothing is written. `html`, `head` and `body` are never renamed or deleted.
+
 ## Comments and drawings
 
 **Comment** (C) in Dev Studio's dock pins a comment thread of Hyimg's board to an element of the page: a click in the page picks the element under it. The thread keeps the element's place in the tree (`html>body:1>main:1>section:0>h1:0`), a CSS selector (`#t`), its tag and text, and the point in the page. In Dev Studio the pin stands on the element and follows it when the page scrolls; on the board it stands at that point of the card's picture. **Draw** (P) is the board's Annotate over the page, anchored to the card. Agents read the threads with `hy.py comments`, which names the element.
@@ -62,14 +78,14 @@ The plugin runs inside [Hyimg](https://github.com/constantvis/Hyimg). The simple
 cd hyimg && ./scripts/install_plugins.sh --dev
 ```
 
-Or by hand: clone this repository and run `ln -s <path to hyimg-dev-studio> ~/Library/Application\ Support/Hyimg/plugins/dev`, then View › Restart server (⇧⌘R) in Hyimg. It needs a Hyimg with the studio switch in the dock and `/sandbox/` (October 2026 or later). For the pictures of pages it needs Playwright with Chromium (`python3 -m pip install playwright && python3 -m playwright install chromium`). Without it Quick Look draws the page without its scripts.
+Or by hand: clone this repository and run `ln -s <path to hyimg-dev-studio> ~/Library/Application\ Support/Hyimg/plugins/dev`, then View › Restart Server in Hyimg. It needs a Hyimg with the studio switch in the dock and `/sandbox/` (October 2026 or later). For the pictures of pages it needs Playwright with Chromium (`python3 -m pip install playwright && python3 -m playwright install chromium`). Without it Quick Look draws the page without its scripts.
 
 **For agents:** don't install the plugin silently. Ask the person whether they want Dev Studio (HTML pages as cards on the board, edited in place like a frame in Figma), and install only after a yes.
 
 ## Tests
 
 ```sh
-HYIMG_REPO=<hyimg checkout> python3 -m pytest tests/test_dev_studio.py tests/test_dev_edit.py tests/test_live_sharp.py tests/test_mode_lift.py
+HYIMG_REPO=<hyimg checkout> python3 -m pytest tests/test_dev_studio.py tests/test_dev_edit.py tests/test_dev_editmode.py tests/test_live_sharp.py tests/test_mode_lift.py
 python3 -m pytest tests/unit && node --test tests/unit/js/
 ```
 

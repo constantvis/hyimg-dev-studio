@@ -1,6 +1,6 @@
 """Dev Studio wears its colour (owner 2026-10-09, «конечно» to «3D Studio и Dev Studio пока остаются синими. Дать им их цвета?»), the green
 of the owner's glossary of modes (--dev), as Image Studio wears its purple (hyimg-image-studio 6e04f1a) and 3D Studio its pink: inside the studio
-the chosen Dev segment of the dock's switch, the picked row of the tree, the chosen weight in the inspector, the tool in hand and the
+the chosen Dev segment of the dock's switch, the picked row of the tree, Edit mode's toggle in the inspector, the tool in hand and the
 primary Done are in the green, Done and the tool with white marks, Reload as it was; the tree's tag, id and class colours stay the code's;
 back on the board the Board segment is the selection's blue again. Chromium, dark, the classic look.
 """
@@ -40,11 +40,10 @@ def test_dev_studio_wears_its_colour(hy):  # noqa: F811
         page.click(".dvt .row:has(.dia:text-is('#t'))"); page.wait_for_function("() => __dev.D.detail && __dev.D.detail.t === 'h1'")
         row = page.evaluate("() => getComputedStyle(document.querySelector('.dvt .row.sel')).backgroundColor")
         assert row == page.evaluate(PROBE, ["color-mix(in srgb, #2fae6a 14%, transparent)", "background-color"]), row
-        # the inspector's chosen weight: on the Studio's plate, not the grey one
-        page.wait_for_selector(".dvr hy-segmented[data-w] > :is(.st, button.on)", timeout=5000)
-        plate = page.evaluate("() => getComputedStyle(document.querySelector('.dvr hy-segmented[data-w] > .st') || "
-                              "document.querySelector('.dvr hy-segmented[data-w] > button.on')).backgroundColor")
-        assert plate == page.evaluate(PROBE, ["color-mix(in srgb, #2fae6a 30%, var(--hy-well))", "background-color"]), plate
+        # Edit mode's mini toggle on (round 15, the weight is a menu now): its track in the Studio's green
+        page.click(".dvr [data-edit]"); page.wait_for_function("() => __dev.D.edit"); page.wait_for_timeout(300)
+        assert page.evaluate("() => getComputedStyle(document.querySelector('.dvr [data-edit]'), '::before').backgroundColor") == green
+        page.click(".dvr [data-edit]"); page.wait_for_function("() => !__dev.D.edit")
         # the tool in hand in the dock and Done top right: filled with the green, white on it; Reload as it was
         page.click("#dock .dvbar [data-tool=pick]"); page.wait_for_function("() => __dev.D.picking"); page.wait_for_timeout(300)
         assert page.evaluate(BTN, "#dock .dvbar [data-tool=pick]") == [green, "rgb(255, 255, 255)"]

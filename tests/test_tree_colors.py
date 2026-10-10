@@ -64,10 +64,11 @@ def test_a_tree_row_takes_a_colour_kept_on_the_card(hy, browser):
         assert s == {"on": True, "c": "#7dbbf5", "bg": "rgb(125, 187, 245)", "w": "3px"}, s
         assert not stripe(page, "header")["on"], "only that row"
         saved(state, lambda c: c == {MAIN: "blue"})
-        # the board's ⌘Z takes a colour back
+        # the board's ⌘Z takes a colour back, once Dev Studio is left: in the Studio ⌘Z is its own (P4 S-07, П4 audit 2026-10-10)
         menu(page, "header", "red"); saved(state, lambda c: c.get(HEADER) == "red")
+        page.click("hy-studio-actions [data-a=done]"); page.wait_for_function("() => !__dev.D")
         page.evaluate("document.activeElement && document.activeElement.blur()"); page.keyboard.press("Meta+z")
-        saved(state, lambda c: c == {MAIN: "blue"})
+        saved(state, lambda c: c == {MAIN: "blue"}); open_dev(page)
         page.wait_for_function("() => !document.querySelector('.dvt .row.hy-rc[data-p=\"html>body:1>header:0\"]')")
         if SHOTS:
             os.makedirs(SHOTS, exist_ok=True)

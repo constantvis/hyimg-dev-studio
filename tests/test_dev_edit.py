@@ -215,7 +215,7 @@ def test_edits_write_the_file_in_place_and_undo_takes_them_back(ed):
         page.wait_for_function("() => __dev.D.sels.size === 2 && __dev.D.more.length === 1 && __dev.D.more[0].src.rev === __dev.D.rev")
         assert "2 elements" in page.inner_text(".dvr .ih")
         shot(page, "dev-edit-two-dark.png")
-        page.click(".dvr hy-segmented[data-w] button[value='700']")
+        page.select_option(".dvr select[data-w]", "700")   # the weight's menu, «Bold 700» (round 15)
         two = PAGE.replace('<h1 id="title">', '<h1 id="title" style="font-weight: 700">').replace('<p id="lead">', '<p id="lead" style="font-weight: 700">')
         file_is(f, two.encode())
         page.evaluate("document.activeElement && document.activeElement.blur()"); page.keyboard.press("Meta+z"); file_is(f, orig)

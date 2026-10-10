@@ -190,3 +190,41 @@ test("the inspector stays out of a page that is not in a frame", () => {
   const p = page(); p.load("agent.js");
   assert.equal(p.window.__hyDevAgent, undefined);
 });
+
+// Edit mode (owner 2026-10-09 on round 15: «режим редактирования HTML ... как в браузере в инспекторе»): the board's live ops on the page
+const idIn = (root, test) => (function find(n) { if (test(n)) return n.i; for (const k of n.k || []) { const r = find(k); if (r) return r; } })(root);
+
+test("Edit mode's live ops: an attribute set and removed, a tag renamed under the same id, an element removed and put back in its place", () => {
+  const { p, ask, msgs } = agent(`<main id="m"><h1 id="t" class="a">Hi</h1><p id="p">x</p><ul id="l"><li>1</li></ul></main>`);
+  const root = msgs("tree")[0].tree.root, doc = p.document;
+  const h1 = idIn(root, n => n.d === "t"), para = idIn(root, n => n.d === "p");
+  ask("live", { ops: [{ i: h1, attr: { title: "x", class: null } }] });
+  assert.equal(doc.getElementById("t").getAttribute("title"), "x");
+  assert.equal(doc.getElementById("t").hasAttribute("class"), false);
+  ask("live", { ops: [{ i: h1, tag: "h2" }] });
+  const h2 = doc.getElementById("t");
+  assert.equal(h2.localName, "h2"); assert.equal(h2.textContent, "Hi"); assert.equal(h2.getAttribute("title"), "x");
+  ask("live", { ops: [{ i: h1, attr: { lang: "en" } }] });
+  assert.equal(h2.getAttribute("lang"), "en", "the renamed element answers to the old id");
+  ask("live", { ops: [{ i: para, remove: true }] });
+  assert.equal(doc.getElementById("p"), null);
+  ask("live", { ops: [{ i: para, restore: true }] });
+  const back = doc.getElementById("p");
+  assert.ok(back); assert.equal(back.previousElementSibling ? back.previousElementSibling.id : back.parentNode.childNodes[back.parentNode.childNodes.indexOf(back) - 1].id, "t");
+  assert.equal(back.nextSibling.id, "l", "back between the h2 and the list");
+});
+
+test("Edit mode: a double click on a text reaches the board even while the page takes the clicks; E and ⌫ are sent", () => {
+  const { p, ask, msgs } = agent(`<main><h1 id="t">Hi</h1></main>`);
+  const h1 = p.document.getElementById("t");
+  p.fire(h1, "dblclick", {});
+  assert.equal(msgs("dbl").length, 0, "not in Inspect mode");
+  ask("edit", { on: true });
+  p.fire(h1, "dblclick", {});
+  assert.equal(msgs("dbl").length, 1);
+  p.fire(p.window, "keydown", { key: "e" });
+  assert.deepEqual(msgs("key").map(m => m.key), ["e"]);
+  ask("sel", { i: msgs("dbl")[0].dbl });
+  p.fire(p.window, "keydown", { key: "Backspace" });
+  assert.deepEqual(msgs("key").map(m => m.key), ["e", "Backspace"]);
+});

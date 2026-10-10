@@ -22,7 +22,7 @@ test("every English plural has two forms and a Russian one of three", async () =
 
 test("every key the card, Dev mode, its inspector, its edits and the tree's comments ask for has its Russian", async () => {
   const { RU } = await fresh(), missing = [];
-  const src = ["canvas.js", "inspect.js", "edits.js", "treecomments.js"].map(read).join("\n");
+  const src = ["canvas.js", "inspect.js", "edits.js", "treecomments.js", "panel.js", "treeedit.js"].map(read).join("\n");
   for (const m of src.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) { const k = JSON.parse('"' + m[1] + '"'); if (!(k in RU)) missing.push(k); }
   assert.deepEqual(missing, []);
 });

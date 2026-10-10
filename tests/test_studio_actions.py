@@ -42,7 +42,7 @@ def test_dev_studio_actions_top_right(hy):  # noqa: F811
         # Done: the studio's green, white words, the key in its tooltip; Reload on the row's glass
         green = page.evaluate(PROBE, "#2fae6a")
         done = page.evaluate("() => { const b = document.querySelector('.dvui hy-studio-actions [data-a=done]'), c = getComputedStyle(b); return [c.backgroundColor, c.color, b.title]; }")
-        assert done == [green, "rgb(255, 255, 255)", "Done · Esc"], done
+        assert done == [green, "rgb(255, 255, 255)", "Done · ⌘↵ or Esc"], done   # ⌘↵ is the primary everywhere (P4 S-28)
         assert page.evaluate("() => getComputedStyle(document.querySelector('.dvui hy-studio-actions [data-a=reload]')).backgroundColor") != green
         # no Mac app: «Open in browser», the page alone, still sandboxed, in a new tab
         assert page.evaluate(GO) == "Open in browser"

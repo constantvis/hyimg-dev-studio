@@ -8,13 +8,16 @@
 //
 // To the board, {hydev: 1, ...}: ready + tree, tree (again when the page changes, at most once a second), hover, pick {pick, shift, path,
 // detail} (a press with the select tool), dbl {dbl, detail} (a double click), detail (the selected element) + more (the other selected
-// ones), text {i, was, text} (typing in place ended), key: "Escape" | "z" (with shift) | "Enter" | "i" | "c" | "p"; a pick carries the element's
+// ones), text {i, was, text} (typing in place ended), key: "Escape" | "z" (with shift) | "Enter" | "i" | "c" | "p" | "e" | "Backspace" | "done" | "reload"; a pick carries the element's
 // key («html>body:1>main:0», the tree's row path), a css selector, its tag and text and the press's point in the page (pt) and the
 // viewport (vp), so a comment can be pinned to it; where {key: [x, y] | [x, y, 1] | null}, its pin's point in the viewport, answers "where"
 // (and again on scroll).
 // From the board, {hydev: 2, a}: "tree"; "hl" {i | null}; "sel" {i, all, scroll}; "inspect" {on}: the select tool (a press picks instead
 // of reaching the page); "marks" {on}; "source" {html, rev}: the file's source with each start tag marked by its offset (data-hy-at);
-// "live" {ops}: an edit shown in the page ({i, style: {prop: value | ""}}, {i, text}, {var, value}); "type" {i}: typing in place;
+// "live" {ops}: an edit shown in the page ({i, style: {prop: value | ""}}, {i, text}, {var, value}; Edit mode's {i, attr: {name: value |
+// null}}, {i, tag} (a new element of that tag takes the old one's place, attributes and children, and its id), {i, remove: true} and
+// {i, restore: true} (the element put back where it stood)); "type" {i}: typing in place; "edit" {on}: Edit mode, a double click on a
+// text types it even while the page takes the clicks;
 // "accent" {c}: the colour of the marks, Dev Studio's green as the board resolves it (a CSS colour; owner 2026-10-09, the picked element in
 // blue: «у нас это синего цвета вместо зеленого»), the dark green until it comes;
 // "where" {keys}: the pins' points of these elements now (see «One rule» below), and after each scroll or resize until asked for other
@@ -39,7 +42,7 @@
   const idOf = n => { let i = ids.get(n); if (!i) { i = next++; ids.set(n, i); nodes.set(i, new WeakRef(n)); } return i; };
   const byId = i => { const r = nodes.get(i), n = r && r.deref(); return n && n.isConnected ? n : null; };
   const send = m => { try { UP.postMessage(Object.assign({ hydev: 1 }, m), "*"); } catch (e) { /* the board is gone */ } };
-  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, zoomOwn = false, ACC = "";
+  let host = null, R = null, hov = null, sel = null, sels = [], inspecting = false, editing = null, SRC = null, epoch = 0, zoomOwn = false, ACC = "", editMode = false;
   // the zoom goes to the board (see the top): registered first, so the page's own listeners never see a gesture that is not theirs
   const zopt = { capture: true, passive: false };
   addEventListener("wheel", e => {
@@ -217,13 +220,16 @@
     if (!s) return { why: "script" };
     const at = s.getAttribute(MARK);
     if (at === null) return { why: "implied" };
-    const o = { at: +at, tag: s.localName, rev: SRC.rev };
+    // inner: the file's start tags inside it, as the page parsed them (htmledit.extent checks its end tag by them); attrs: its attributes in
+    // the file (an attribute edit names what it changes)
+    const o = { at: +at, tag: s.localName, rev: SRC.rev, inner: s.querySelectorAll(`[${MARK}]`).length,
+      attrs: [...s.attributes].filter(a => a.name !== MARK).slice(0, 80).map(a => [a.name, a.value]) };
     if (!el.children.length && !s.children.length && !LEAF_NO.test(s.localName)) o.text = s.textContent;
     return o;
   }
 
   /* ---------- where a value comes from: the rules of the page's readable sheets (a linked sheet of another address is not readable) ---------- */
-  const EP = ["color", "background-color", "border-color", "border-width", "border-style", "border-radius", "font-size", "font-weight", "opacity", "padding", "gap", "width", "height"];
+  const EP = ["color", "background-color", "border-color", "border-width", "border-style", "border-radius", "font-size", "font-weight", "opacity", "padding", "gap", "width", "height", "filter"];
   const INH = new Set(["color", "font-size", "font-weight"]);
   const SHORT = { "background-color": ["background"], "border-color": ["border"], "border-width": ["border"], "border-style": ["border"], "font-size": ["font"], "font-weight": ["font"] };
   const splitTop = s => {   // a selector list split at its top-level commas
@@ -309,7 +315,7 @@
     return d;
   }
   const brief = el => {   // another selected element: where it is in the file, and its inline values (an undo puts them back)
-    const o = { i: idOf(el), t: el.tagName.toLowerCase(), inl: {} };
+    const o = { i: idOf(el), t: el.tagName.toLowerCase(), d: el.id || "", c: [...el.classList].slice(0, 4), path: pathOf(el), inl: {} };
     try { o.src = srcOf(el); for (const p of EP) { const v = el.style.getPropertyValue(p); if (v) o.inl[p] = v; } } catch (e) { o.src = { why: "error" }; }
     return o;
   };
@@ -379,12 +385,31 @@
     }
     document.documentElement.style.setProperty(name, value);
   }
+  const GONE = new Map();   // Edit mode: removed elements by id, where they stood, so ⌘Z puts them back
+  function retag(el, name) {   // a new element of that tag in el's place: its attributes, its children, its id in the tree
+    let nu; try { nu = document.createElementNS(el.namespaceURI, name); } catch (e) { return; }
+    for (const a of el.attributes) { try { nu.setAttribute(a.name, a.value); } catch (e) { /* a name this namespace refuses */ } }
+    while (el.firstChild) nu.appendChild(el.firstChild);
+    const i = idOf(el); el.replaceWith(nu); ids.set(nu, i); nodes.set(i, new WeakRef(nu));
+    if (sel === el) sel = nu; sels = sels.map(x => x === el ? nu : x); if (hov === el) hov = null;
+  }
   function live(ops) {
     for (const o of ops || []) {
       if (o.var) { setVar(o.var, o.value); continue; }
+      if (o.restore) {
+        const g = GONE.get(o.i); if (!g || g.el.isConnected) continue; GONE.delete(o.i);
+        if (g.next && g.next.parentNode === g.parent) g.parent.insertBefore(g.el, g.next); else if (g.parent.isConnected) g.parent.appendChild(g.el);
+        continue;
+      }
       const el = byId(o.i); if (!el) continue;
       if (o.style) for (const [p, v] of Object.entries(o.style)) { if (v) el.style.setProperty(p, v); else el.style.removeProperty(p); }
       if (typeof o.text === "string" && !el.children.length) el.textContent = o.text;
+      if (o.attr) for (const [n, v] of Object.entries(o.attr)) { try { if (v === null) el.removeAttribute(n); else el.setAttribute(n, v); } catch (e) { /* not a name */ } }
+      if (typeof o.tag === "string" && o.tag !== el.localName && /^[a-z][a-z0-9-]*$/.test(o.tag)) retag(el, o.tag);
+      if (o.remove && el !== document.documentElement && el !== document.body && el !== document.head) {
+        GONE.set(o.i, { el, parent: el.parentNode, next: el.nextSibling }); el.remove();
+        if (sel === el) sel = null; sels = sels.filter(x => x !== el); if (hov === el) hov = null;
+      }
     }
     later();
   }
@@ -396,7 +421,12 @@
     editing = { el, i, was, prev }; const c = catcher(); if (c) c.style.display = "none";
     el.focus({ preventScroll: true });
     try { const rg = document.createRange(); rg.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(rg); } catch (e) { /* no selection API */ }
-    const key = e => { if ((e.key === "Enter" && !e.shiftKey) || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(); } };
+    // typing in place is the canvas's text: ↵ and Esc keep it (Hyimg's rule, owner decision 2026-10-10), ⌘↵ keeps it and is Done; a text in the
+    // file is one line, so ⇧↵ writes no line break the file would lose (P4 S-59)
+    const key = e => {
+      if (e.key === "Enter" && e.shiftKey) { e.preventDefault(); e.stopPropagation(); return; }
+      if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); e.stopPropagation(); finish(); if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) send({ key: "done" }); }
+    };
     el.addEventListener("keydown", key); el.addEventListener("blur", finish);
     editing.off = () => { el.removeEventListener("keydown", key); el.removeEventListener("blur", finish); };
     place();
@@ -407,6 +437,7 @@
     try { getSelection().removeAllRanges(); } catch (x) { /* none */ }
     const c = catcher(); if (c) c.style.display = inspecting ? "block" : "none";
     place(); send({ text: { i: e.i, was: e.was, text: e.el.textContent } });
+    changed();   // the tree shows the leaf's new text (typing changes text nodes, which the observer below does not watch)
   }
   // while typing, a press outside the element ends it and never reaches the page (these listeners are the page's first)
   ["pointerdown", "mousedown", "click"].forEach(t => addEventListener(t, e => {
@@ -417,7 +448,10 @@
   // the page changed (a script added rows, a class flipped): the tree again, at most once a second
   let mt = 0, last = 0;
   const changed = () => { clearTimeout(mt); mt = setTimeout(() => { last = Date.now(); send({ tree: tree() }); if (sel) { if (sel.isConnected && !editing) sendSel(); later(); } }, Math.max(300, 1000 - (Date.now() - last))); };
-  new MutationObserver(ms => { if (ms.every(m => host && (m.target === host || host.contains(m.target) || [...m.addedNodes].every(n => n === host)))) return; epoch++; changed(); })
+  // (only our marks: their own element added, or a change inside it; an attribute of the page's, as an id or a class Edit mode or a script
+  // set, is the page's: its empty addedNodes made every record look like ours before)
+  const ours = m => host && (m.target === host || host.contains(m.target) || (m.type === "childList" && m.addedNodes.length > 0 && !m.removedNodes.length && [...m.addedNodes].every(n => n === host)));
+  new MutationObserver(ms => { if (ms.every(ours)) return; epoch++; changed(); })
     .observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ["id", "class"] });
 
   addEventListener("message", e => {
@@ -434,6 +468,7 @@
     else if (d.a === "zoom") zoomOwn = !!d.on;
     else if (d.a === "accent" && typeof d.c === "string" && /^(#[0-9a-f]{3,8}|rgba?\([\d.,\s%/]+\)|color\(srgb[\d.\s/%]+\))$/i.test(d.c.trim())) {
       ACC = d.c.trim(); if (host) host.style.setProperty("--hyk", ACC); }
+    else if (d.a === "edit") editMode = !!d.on;
     else if (d.a === "inspect") { ensure(); inspecting = !!d.on; catcher().style.display = inspecting && !editing ? "block" : "none"; if (!inspecting) { hov = null; place(); } }
     else if (d.a === "source" && typeof d.html === "string") {
       try { SRC = { doc: new DOMParser().parseFromString(d.html, "text/html"), rev: d.rev }; epoch++; } catch (x) { SRC = null; }
@@ -441,20 +476,38 @@
     }
     else if (d.a === "live") live(d.ops);
     else if (d.a === "type") type(d.i);
+    else if (d.a === "finish") { finish(); send({ finished: 1 }); }   // Dev Studio leaves or reloads: the text being typed goes over first
     else if (d.a === "where") { WATCH = (d.keys || []).slice(0, 200).map(String); sendWhere(); }
     else if (d.a === "spot") { const el = byId(d.i); send({ spot: Object.assign({ i: d.i }, el && spot(el)) }); }
     else if (d.a === "unspot") unspot(d.n);
   });
+  // Edit mode with the page taking the clicks: a double click on an element of text types it, as with Select on (the catcher's dblclick)
+  addEventListener("dblclick", e => {
+    if (!editMode || inspecting || editing) return;
+    const el = e.target && e.target.nodeType === 1 ? e.target : e.target && e.target.parentElement; if (!el || el === host) return;
+    e.preventDefault(); e.stopPropagation(); send({ dbl: idOf(el), path: pathOf(el), detail: detail(el) });
+  }, true);
   // keys the board takes while the page has the focus: Esc, ⌘Z and ⇧⌘Z, I, Enter to type a selected text; never while the page's own field has it
   addEventListener("keydown", e => {
     if (editing) return;
-    const a = document.activeElement, field = a && (a.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName));
+    // the page's own field: Hyimg's one rule for keys while typing (its ui/typing.js; this page cannot load it), here in the page's document,
+    // through its shadow roots (a web component's input), [role=textbox], a letter still being composed; its selects too
+    // A closed shadow root hides its field (P4 S-36, best effort): the focused custom element that owns one is taken for a field; a field in
+    // a closed root of an element that is not focused itself stays out of reach, a browser's limit
+    const fld = x => !!x && x.nodeType === 1 && (x.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(x.tagName) || x.getAttribute("role") === "textbox"
+      || (x.localName.includes("-") && !x.shadowRoot && x === document.activeElement && x.matches(":focus-within")));
+    let a = document.activeElement; while (a && a.shadowRoot && a.shadowRoot.activeElement) a = a.shadowRoot.activeElement;
+    const field = e.isComposing || fld(a) || fld(e.composedPath ? e.composedPath()[0] : e.target);
+    if (field) return;   // Esc too: the page's own field keeps it (P4 S-35), a click beside it gives the keys back
     if (e.key === "Escape") send({ key: "Escape" });
-    else if (field) return;
+    else if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key === "Enter") { e.preventDefault(); send({ key: "done" }); }   // ⌘↵ Done (S-28)
+    else if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === "KeyR") { e.preventDefault(); send({ key: "reload" }); }   // ⌥R the page
     else if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.key === "z" || e.key === "я" || e.key === "Z")) { e.preventDefault(); send({ key: "z", shift: e.shiftKey }); }
     else if (e.key === "Enter" && inspecting && sel) { e.preventDefault(); send({ key: "Enter" }); }
     // I turns the select tool on and off also while the page takes the clicks (it opens so, owner 2026-10-08), unless one of its fields is typed in
-    else if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[iIшШ]$/.test(e.key)) { e.preventDefault(); send({ key: "i" }); }
+    else if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[vVмМiIшШ]$/.test(e.key)) { e.preventDefault(); send({ key: "i" }); }   // V selects (S-30), I too
+    else if (!e.metaKey && !e.ctrlKey && !e.altKey && /^[eEуУ]$/.test(e.key)) { e.preventDefault(); send({ key: "e" }); }   // Edit mode on and off
+    else if (editMode && sel && (e.key === "Backspace" || e.key === "Delete")) { e.preventDefault(); send({ key: "Backspace" }); }
     else if (inspecting && !e.metaKey && !e.ctrlKey && !e.altKey && /^[cCсСpPзЗ]$/.test(e.key)) {   // C a comment on an element, P draw over the page
       e.preventDefault(); send({ key: /^[cCсС]$/.test(e.key) ? "c" : "p" }); }
   }, true);

@@ -1,11 +1,11 @@
 {
  "title": "Dev Studio",
  "title_ru": "Dev Studio",
- "version": "0.2.0",
+ "version": "0.3.0",
  "description": "HTML files as cards; Dev Studio edits a page the way Figma edits a frame",
  "description_ru": "HTML-файлы карточками; Dev Studio правит страницу, как Figma правит фрейм",
  "canvas": "canvas.js",
- "about": "HTML files of the library as cards on the Hyimg canvas, a live sandboxed page when big on screen; Dev Studio: the page's DOM tree, the live page and an inspector of the selected element; it edits the file in place: colours, fill, stroke, corners, type, opacity, padding, size and text, a :root variable for this element or everywhere, undo with ⌘Z",
+ "about": "HTML files of the library as cards on the Hyimg canvas, a live sandboxed page when big on screen; Dev Studio: the page's DOM tree, the live page and an inspector of the selected element; it edits the file in place: colours, fill, stroke, corners, type, opacity, padding, size and text, a :root variable for this element or everywhere, undo with ⌘Z; Edit mode (E): the HTML edited as in a browser's inspector, tags, attributes, text and elements, each change written into the file in place, History of the session's writes",
  "server": "server.py",
  "kinds": { "html": [".html", ".htm"] },
  "pageScript": "agent.js"

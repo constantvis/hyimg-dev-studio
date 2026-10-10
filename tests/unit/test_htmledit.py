@@ -86,3 +86,64 @@ def test_routes_refuse_paths_outside_and_files_not_html(server, tmp_path, monkey
     assert call(server.undo, {"p": "site/a.html", "step": res["step"], "dir": "undo"})[0] == 200 and (lib / "site/a.html").read_text() == SRC
     assert call(server.undo, {"p": "site/a.html", "step": res["step"], "dir": "redo"})[0] == 200
     assert call(server.undo, {"p": "site/a.html", "step": res["step"], "dir": "redo"})[0] == 409, "redo twice: the file is not as before"
+
+
+# Edit mode (owner 2026-10-09 on round 15: «режим редактирования HTML ... как в браузере в инспекторе»): attributes, a tag's name, an
+# element taken out; each changes only its own bytes, and what the file can't say for sure is refused
+DOC = """<body>
+  <section class="card hero" id=s data-x='a "q"' hidden>
+    <h1 id="t">Hello</h1>
+    <div class="x"><div>inner</div></div>
+    <img src=x.png/>
+  </section>
+<ul><li>Open<li>Next</li></ul>
+<p>One<div>x</div></p>
+<svg><path d="M0 0"/></svg>
+</body>"""
+
+
+def d_at(s):
+    return DOC.index(s)
+
+
+def test_attributes_set_add_and_remove_in_place():
+    sec = d_at("<section")
+    t = H.apply(DOC, [{"op": "attrs", "at": sec, "tag": "section", "set": {"class": "card", "id": "z", "title": 'a&b"c'}, "was": {"class": "card hero", "id": "s"}}])
+    assert t == DOC.replace("""<section class="card hero" id=s data-x='a "q"' hidden>""", """<section class="card" id="z" data-x='a "q"' hidden title="a&amp;b&quot;c">""")
+    t = H.apply(DOC, [{"op": "attrs", "at": sec, "tag": "section", "set": {"data-x": "it's", "hidden": None}}])
+    assert t == DOC.replace("""data-x='a "q"' hidden>""", "data-x='it&#39;s'>"), "the value in its own quotes, the attribute with its space gone"
+    t = H.apply(DOC, [{"op": "attrs", "at": d_at("<img"), "tag": "img", "set": {"alt": "x"}}])
+    assert t == DOC.replace("<img src=x.png/>", '<img src=x.png/ alt="x">'), "the slash of an unquoted value stays its own"
+    t = H.apply(DOC, [{"op": "attrs", "at": d_at("<path"), "tag": "path", "set": {"fill": "red"}}])
+    assert t == DOC.replace('<path d="M0 0"/>', '<path d="M0 0" fill="red"/>')
+    assert H.apply(DOC, [{"op": "attrs", "at": sec, "tag": "section", "set": {"class": "card hero"}}]) == DOC, "the same value writes nothing"
+
+
+def test_rename_and_remove_take_the_end_tag_and_the_line():
+    x = d_at('<div class="x">')
+    t = H.apply(DOC, [{"op": "tag", "at": x, "tag": "div", "name": "article", "inner": 1}])
+    assert t == DOC.replace('<div class="x"><div>inner</div></div>', '<article class="x"><div>inner</div></article>'), "the nested div's end tag is its own"
+    t = H.apply(DOC, [{"op": "remove", "at": x, "tag": "div", "inner": 1}])
+    assert t == DOC.replace('    <div class="x"><div>inner</div></div>\n', ""), "alone on its line: the line goes"
+    t = H.apply(DOC, [{"op": "remove", "at": d_at("<li>Next"), "tag": "li", "inner": 0}])
+    assert t == DOC.replace("<li>Next</li>", ""), "beside others on its line: only the element"
+    assert H.apply(DOC, [{"op": "remove", "at": d_at("<img"), "tag": "img"}]) == DOC.replace("    <img src=x.png/>\n", "")
+
+
+@pytest.mark.parametrize("op", [
+    {"op": "remove", "at": DOC.index("<li>Open"), "tag": "li", "inner": 0},      # its end tag is left out
+    {"op": "remove", "at": DOC.index("<p>"), "tag": "p", "inner": 0},            # the browser closes it before the div
+    {"op": "tag", "at": DOC.index('<div class="x">'), "tag": "div", "name": "p", "inner": 0},   # not the page's count inside
+    {"op": "tag", "at": DOC.index("<body"), "tag": "body", "name": "main"},
+    {"op": "remove", "at": DOC.index("<body"), "tag": "body"},
+    {"op": "tag", "at": DOC.index("<h1"), "tag": "h1", "name": "script", "inner": 0},
+    {"op": "tag", "at": DOC.index("<h1"), "tag": "h1", "name": "h1 onclick=x", "inner": 0},
+    {"op": "attrs", "at": DOC.index("<h1"), "tag": "h1", "set": {"data-hy-at": "1"}},
+    {"op": "attrs", "at": DOC.index("<h1"), "tag": "h1", "set": {"a b": "1"}},
+    {"op": "attrs", "at": DOC.index("<h1"), "tag": "h1", "set": {"id": "x"}, "was": {"id": "other"}},   # a script changed it
+    {"op": "attrs", "at": DOC.index("<h1"), "tag": "h2", "set": {"id": "x"}},
+    {"op": "attrs", "at": DOC.index("<h1"), "tag": "h1", "set": {"id": "a\x00b"}},
+])
+def test_what_edit_mode_cant_be_sure_of_is_refused(op):
+    with pytest.raises(H.Refused):
+        H.apply(DOC, [op])
