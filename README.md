@@ -14,7 +14,7 @@ Every page runs in `<iframe sandbox="allow-scripts">` without `allow-same-origin
 
 ## Dev Studio
 
-Double-click an HTML card, or select it and pick **Dev** in the switch at the left of the dock. The card turns live in place and the camera brings it between two panels.
+Double-click an HTML card, or select it and pick **Dev** in the switch at the left of the dock. The card turns live in place and the camera brings it between two panels. The crumb gains one step, the page: a green dot and its title (else the file's name), the file's path in its tooltip, as every Studio names what is open (Hyimg round 20 «One shell», owner 2026-10-11).
 
 On the left is the tree of the page's elements, with the library's «Find folder» search on top. The search keeps the matching rows and the rows they sit in. Hover a row and its element is marked in the page. Click it and the element opens in the inspector, and the page scrolls to it if it's off screen. Right-click a row to give it one of the board notes' colours: a stripe on its left marks it. The colour is kept on the card (`treeColors` in its board item, keyed by the row's place in the page), not in the page, and the board's ⌘Z takes it back.
 

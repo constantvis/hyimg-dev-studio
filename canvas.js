@@ -199,7 +199,7 @@ addEventListener("message", e => {
   if (d.tree) {
     D.tree = d.tree;
     if (d.ready) {
-      D.info = { title: d.title, vw: d.vw, vh: d.vh }; D.open = new Set(); const r = d.tree.root;
+      D.info = { title: d.title, vw: d.vw, vh: d.vh }; if (HY.modeChanged) HY.modeChanged(); D.open = new Set(); const r = d.tree.root;
       if (r) { D.open.add(r.i); (r.k || []).forEach(k => { if (k.t === "body") { D.open.add(k.i); } }); }
       // a page (again): the select tool, the source, the pins, the marks' colour, Edit mode
       setPicking(D.picking); EDITS.load(); D.watching = null; watchPins(); accent(); toPage({ a: "edit", on: !!D.edit });
@@ -465,7 +465,6 @@ export function register(hy) {
     .plg.dvlive { overflow: hidden !important; }   /* no outline (owner 2026-10-08): the board lifts the card with a shadow instead */
     .plg.dvlive > :not(iframe.dvf) { visibility: hidden; }
     .plg.dvlive iframe.dvf { position: absolute; left: 0; top: 0; border: 0; transform-origin: 0 0; background: #fff; visibility: visible; }
-    body.dvedit #info { display: none !important; }
     /* the panels are blocks of the app, round 12 «A · Line» (owner 2026-10-09: «реализуй уже A Line версию на весь интерфейс»): Hyimg
        ui/hy/block.css draws their surface, the sections' heads and the wells; ⌘. hides them with the board's interface (data-hyui), each
        toward its own edge */
@@ -550,6 +549,9 @@ export function register(hy) {
     title: t("Dev Studio for the selected HTML card: the page's tree, the live page, the inspector"), hint: t("Select an HTML card or enter one: Dev Studio opens for it"),
     hintStudio: t("Open an HTML card to use Dev Studio"),   // the tooltip while another Studio is open (owner decision 2026-10-10)
     isOpen: () => !!D, card: () => D && D.id,
+    // the shell (Hyimg ui/modes.js, round 20 «Одна оболочка», owner 2026-10-11: «беру»): the page's step in the crumb, its title or the
+    // file's name, the file's path in the tooltip (studios audit S-06: Dev Studio said nowhere what was open)
+    doc() { if (!D) return null; const it = HY.board.items[D.id] || {}; return { name: (D.info && D.info.title) || it.src || "", path: it.src || "" }; },
     target: ids => { const it = ids.length === 1 && HY.board.items[ids[0]], el = it && cardEl(ids[0]); return isPage(it) && !(it.type === FRAME_TYPE && el && el.classList.contains("plg-live")) ? ids[0] : null; },
     enter: id => openDev(id),
     leave: () => closeDev(),   // Done: nothing in Dev Studio waits to be saved, it never asks (owner decision 2026-10-10, S-26)

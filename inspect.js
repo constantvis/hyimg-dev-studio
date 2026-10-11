@@ -6,7 +6,8 @@
 // implied by the parser) shows the reason and its controls are grey.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const WEIGHTS = [["300", "Light"], ["400", "Regular"], ["500", "Medium"], ["600", "Semibold"], ["700", "Bold"], ["800", "Extra bold"]];
-// round 15 (r15/r15-dev.html, owner 2026-10-09: «Да, неплохо, делай»): a field is a well with its label inside (W auto, Padding 0 0 18 px),
+// round 15 (r15/r15-dev.html, owner 2026-10-09: «Да, неплохо, делай»): a field is a well with its handle inside (W auto, ▢ 0 0 18 px; the
+// words Padding, Gap… moved to the handle's tooltip on 2026-10-11, S-03: in Russian they ran under the number),
 // a colour a well with its swatch and value, the weight a menu («Semibold 600»), Blur beside Corners; the choice «This element | Everywhere»
 // Hyimg's micro segments (<hy-segmented variant=micro>, r15-micro #3, owner 2026-10-09: «Все топ, все делай»). A number field drags by its
 // label as in Figma (Hyimg's scrub(), ui/hy/scrub.js; owner 2026-10-10 on r16-scrub.html, version A: «отлично, беру»): ⇧ ten times
@@ -32,6 +33,8 @@ export function typed(prop, s) {
 // the numbers a field's label drags, or null when the field holds something else (1em, a filter other than one blur()): W and H «auto»
 // start from the page's own size, Blur from its radius
 const NUMS = /^-?[\d.]+(px)?$/;
+// a field's handle: the icon of its number (Hyimg ui/icons.js), W and H their letter
+const HANDLE = { padding: "padding", gap: "gap", "border-radius": "radius", filter: "blur", "font-size": "textSize", "border-width": "strokeWidth" };
 export function numsOf(s) { const a = String(s || "").trim().split(/\s+/).filter(Boolean); return a.length && a.every(x => NUMS.test(x)) ? a.map(parseFloat) : null; }
 function start(inp, prop) {
   const v = inp.value.trim();
@@ -69,17 +72,21 @@ export function drawEdit(D, t, icon) {
     }
     return row;
   };
-  const field = (prop, label, val, o = {}) => `<label class="dnf" data-p="${prop}"${o.tip ? ` title="${esc(o.tip)}"` : ""}><span class="dnl" aria-hidden="true">${esc(label)}</span>`
+  // the handle is a letter or an icon, never a word: the word is its tooltip and the field's name for a screen reader (Hyimg's rule for a
+  // scrub, studios audit S-03, 2026-10-11: «Зазор24», «Разме16», the Russian words ran under the number)
+  const field = (prop, label, val, o = {}) => `<label class="dnf" data-p="${prop}"${o.tip ? ` title="${esc(o.tip)}"` : ""}>`
+    + `<span class="dnl" title="${esc(label)}" aria-hidden="true">${HANDLE[prop] ? icon(HANDLE[prop], 13) : esc(label)}</span>`
     + `<input class="dfi" data-n="${prop}" value="${esc(val)}" spellcheck="false" aria-label="${esc(label)}"${o.ph ? ` placeholder="${esc(o.ph)}"` : ""}${o.off ? " disabled" : ""}`
     + `${o.used ? ` data-used="${esc(o.used)}"` : ""}>`
     + `${o.u ? `<span class="du">${o.u}</span>` : ""}</label>`;
   const set = p => P[p].set && !/^(auto|initial|inherit|unset|normal)$/.test(P[p].set);
   const px = v => /^-?[\d.]+px$/.test((v || "").trim()) ? "px" : "";
   // W and H: the page's value when it sets one, else «auto» (typing a number sets it); Gap only in a flex or grid box
-  const layout = [field("width", "W", set("width") ? num(P.width.v) : "", { ph: "auto", used: P.width.v }),
-    field("height", "H", set("height") ? num(P.height.v) : "", { ph: "auto", used: P.height.v }),
+  const layout = [field("width", "W", set("width") ? num(P.width.v) : "", { ph: "auto", used: P.width.v, u: set("width") ? px(P.width.v) : "" }),
+    field("height", "H", set("height") ? num(P.height.v) : "", { ph: "auto", used: P.height.v, u: set("height") ? px(P.height.v) : "" }),
     field("padding", t("Padding"), P.padding.v.split(" ").map(num).join(" "), { u: px(P.padding.v.split(" ")[0]) }),
-    field("gap", t("Gap"), e.flex ? num(P.gap.v.split(" ")[0]) : "", { ph: "—", off: !e.flex, tip: e.flex ? "" : t("Only in a flex or grid box") })].join("");
+    field("gap", t("Gap"), e.flex ? num(P.gap.v.split(" ")[0]) : "", { ph: "—", off: !e.flex, tip: e.flex ? "" : t("Only in a flex or grid box"),
+      u: e.flex ? px(P.gap.v.split(" ")[0]) : "" })].join("");
   // Blur: the page's filter when it is one blur(), else the filter shows and the field is off (it would replace the filter)
   const fv = (P.filter && P.filter.v) || "none", bm = /^blur\(([-\d.]+)px\)$/.exec(fv.trim()), bOK = fv === "none" || !!bm;
   const blur = field("filter", t("Blur"), bm ? num(bm[1] + "px") : bOK ? "0" : fv, { u: bOK ? "px" : "", off: !bOK, tip: bOK ? "" : t("The page's filter: {v}", { v: fv }) });
@@ -211,11 +218,10 @@ export const CSS_EDIT = `
   /* a field (r15 .fld): one well, its label inside before the value, its unit at the end */
   .dvr .dnf { position: relative; display: flex; align-items: center; min-width: 0; height: var(--hy-ctl-h, 24px); }
   /* its label is the scrub's handle (Hyimg .hy-scrub-h: ew-resize, the selection's tint under the pointer), the height of the well */
-  .dvr .dnf > .dnl { position: absolute; left: 4px; top: 0; bottom: 0; z-index: 1; margin: 0; padding: 0 4px; font-size: 12px; }
+  .dvr .dnf > .dnl { position: absolute; left: 2px; top: 0; bottom: 0; z-index: 1; width: 20px; min-width: 0; margin: 0; padding: 0; font-size: 12px; }
+  .dvr .dnf > .dnl > svg { width: 13px; height: 13px; display: block; }
   .dvr .dnf:not(.hy-scrubbing) > .dnl:not(:hover) { color: var(--muted); }
-  .dvr .dnf .dfi { padding-left: calc(var(--lw, 14px) + 14px); padding-right: 22px; font-family: var(--sans, system-ui); }
-  .dvr .dnf[data-p=padding] { --lw: 50px; } .dvr .dnf[data-p=gap] { --lw: 26px; } .dvr .dnf[data-p=border-radius] { --lw: 50px; }
-  .dvr .dnf[data-p=filter] { --lw: 28px; } .dvr .dnf[data-p=font-size] { --lw: 26px; } .dvr .dnf[data-p=border-width] { --lw: 38px; }
+  .dvr .dnf .dfi { padding-left: 26px; padding-right: 22px; font-family: var(--sans, system-ui); }
   .dvr .dnf .du { position: absolute; right: 8px; color: var(--muted); font-size: 12px; pointer-events: none; }
   .dvr .dnf .dfi:disabled { color: var(--muted); }
   .dvr .dop { padding: 2px 6px 4px; }

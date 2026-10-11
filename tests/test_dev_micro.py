@@ -96,9 +96,11 @@ def test_each_place_wears_the_micro_primitive(ed):  # noqa: F811
           return [l.dataset.p, h.textContent, h.classList.contains('hy-scrub-h'), getComputedStyle(h).cursor, i.getAttribute('aria-label')]; })""")
         by = {g[0]: g[1:] for g in got}
         assert set(by) == set(FIELDS), by
+        # the handle a letter or an icon, the word its field's name (Hyimg's rule for a scrub, studios audit S-03, 2026-10-11)
         for prop, label in FIELDS.items():
-            if prop == "gap": assert by[prop][:2] == ["Gap", False], by[prop]; continue
-            assert by[prop] == [label, True, "ew-resize", label], (prop, by[prop])
+            mark = label if len(label) == 1 else ""
+            if prop == "gap": assert by[prop][:2] == [mark, False], by[prop]; continue
+            assert by[prop] == [mark, True, "ew-resize", label], (prop, by[prop])
 
         # 7 · a written row wears Hyimg's change dot in the green; 8 · in Edit mode the hovered row shows + and the bin as .hy-ri
         drag(page, ".dvr .dnf[data-p=width] .dnl", 30)

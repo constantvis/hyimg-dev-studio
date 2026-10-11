@@ -81,7 +81,8 @@ def test_dock_tools_each_take_their_click(hy):  # noqa: F811
     with sync_playwright() as p:
         br, page, errors = board(p, port); dark(page); enter(page)
         # no Draw: Hyimg's drawing tools wait for later (owner 2026-10-09, hyimg docs/LATER.md)
-        assert page.evaluate(f"() => [...document.querySelectorAll('{DOCKB}')].map(b => b.dataset.tool || b.dataset.a)") == ["pick", "comment", "undo", "redo"]
+        # Actions is one of them too: Hyimg's icon button, its name and ⌘K in the tooltip (studios audit S-01, 2026-10-11)
+        assert page.evaluate(f"() => [...document.querySelectorAll('{DOCKB}')].map(b => b.dataset.tool || b.dataset.a)") == ["pick", "comment", "undo", "redo", "acts"]
         assert page.locator(f"{DOCKB}[data-tool=comment]").get_attribute("aria-label") == "Annotation"
         # each one is what the pointer finds at its middle: nothing lies over the dock
         top = page.evaluate(f"""() => [...document.querySelectorAll('{DOCKB}')].map(b => {{ const r = b.getBoundingClientRect();
@@ -192,7 +193,9 @@ def test_geometry_matches_the_board_and_the_other_studios(hy):  # noqa: F811
         dev_sep = page.evaluate(SEP, "#dock .dvbar .sep")
         dev_blk = page.evaluate(BLOCK, {"search": ".dvl .hy-search > input", "sh": ".dvl .hy-sh", "row": ".dvt .row", "bh": ".dvr .hy-bh", "tab": ".dvr .hy-bh-tab", "blk": ".dvr"})
         # the dock and its switch are the Board's; every button of Dev Studio's dock one size, one look (owner: «размеры ... не соответствуют»)
-        assert dev_dock == board_dock or {k: v for k, v in dev_dock.items() if k != "w"} == board_dock, (dev_dock, board_dock)
+        # in a Studio the switch is Board and that Studio alone (studios audit S-01, 2026-10-11), its segments the Board's size
+        assert {k: v for k, v in dev_dock.items() if k not in ("w", "modes")} == {k: v for k, v in board_dock.items() if k != "modes"}, (dev_dock, board_dock)
+        assert [w for w in dev_dock["modes"][2:] if w] == board_dock["modes"][2:4] and dev_dock["modes"][1] == board_dock["modes"][1], (dev_dock, board_dock)
         assert len({json.dumps(v) for v in dev.values()}) == 1, dev
         assert dev["pick"]["h"] == 34 and dev["pick"]["icon"] == 17 and dev["pick"]["r"] == "999px", dev["pick"]
         # the block header and its one title: 34 px, a 24 px tab on its plate, as every block's (Hyimg ui/hy/block.css)
@@ -207,7 +210,8 @@ def test_geometry_matches_the_board_and_the_other_studios(hy):  # noqa: F811
             img_dock = page.evaluate(DOCK)
             assert {k: dev["pick"][k] for k in ("w", "h", "r", "bg", "pad", "icon")} == img, (dev["pick"], img)
             assert img_on["w"] == dev["pick"]["w"] and dev_sep == img_sep, (img_on, dev_sep, img_sep)
-            assert {k: v for k, v in img_dock.items() if k != "modes"} == {k: v for k, v in dev_dock.items() if k != "modes"} and img_dock["modes"] == dev_dock["modes"], (img_dock, dev_dock)
+            assert {k: v for k, v in img_dock.items() if k != "modes"} == {k: v for k, v in dev_dock.items() if k != "modes"}, (img_dock, dev_dock)
+            assert [w for w in img_dock["modes"] if w] == [w for w in dev_dock["modes"] if w], (img_dock, dev_dock)
             page.click("#modes [data-mode=board]"); page.wait_for_function("() => !__frames.ED", timeout=10000)
         if page.evaluate("() => PLGST.some(x => x.name === '3d' && x.ok)"):   # 3D Studio's blocks: its search, its section heads, its block header
             page.evaluate("() => { sel = new Set(['m1']); render(); MODES.enter('3d', ['m1']); }")
